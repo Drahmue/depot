@@ -121,3 +121,4 @@ Thumbs.db
 # Data files
 *.parquet
 *.xlsx
+*.log
