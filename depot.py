@@ -1253,7 +1253,8 @@ def instruments_import_and_process(settings, logfile, screen=True):
         # Exportiere instruments_type_df als Excel-Datei
         if settings['Export']['instruments_type_to_excel']:
             try:
-                export_df_to_excel(instruments_type_df, "instruments_type_export.xlsx", logfile, screen=False)
+                if settings["Export"]["instruments_type_to_excel"]["enabled"]:
+                    export_df_to_excel(instruments_type_df, settings["Export"]["instruments_type_to_excel"]["filename"], logfile, screen=False)
             except Exception as e:
                 screen_and_log(f"WARNING: Fehler beim Exportieren der Instruments-Type-Daten: {e}", logfile, screen=screen)
                 warning_count += 1
@@ -1931,16 +1932,19 @@ def export_overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df
     format_columns=[9, 12, 10, 10, 10]
 
     overview_day_df = overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df, logfile, screen=screen)
-    export_df_to_excel(overview_day_df, "overview_day_report.xlsx", logfile, screen=False)
+    if settings["Export"]["overview_day_to_excel"]["enabled"]:
+        export_df_to_excel(overview_day_df, settings["Export"]["overview_day_to_excel"]["filename"], logfile, screen=False)
 
     values_month_df = df_to_eom(values_day_df)
     unrealized_gains_losses_month_df = df_2D_sum_per_period(unrealized_gains_losses_day_df, 'month')
     invest_month_df = df_1D_sum_per_period(invest_day_df, 'month')
 
     overview_month_df = overview(values_month_df, unrealized_gains_losses_month_df, invest_month_df, logfile, screen=screen)
-    export_df_to_excel(overview_month_df, "overview_month_report.xlsx", logfile, screen=False)
-    format_excel_as_table_with_freeze("overview_month_report.xlsx", table_name="Table1", style_name="TableStyleMedium1", freeze_first_row=True, logfile=logfile, screen=False)
-    format_excel_columns("overview_month_report.xlsx",format_numbers, format_columns, logfile, screen=False)
+    if settings["Export"]["overview_month_to_excel"]["enabled"]:
+        export_df_to_excel(overview_month_df, settings["Export"]["overview_month_to_excel"]["filename"], logfile, screen=False)
+    if settings["Export"]["overview_month_to_excel"]["enabled"]:
+        format_excel_as_table_with_freeze(settings["Export"]["overview_month_to_excel"]["filename"], table_name="Table1", style_name="TableStyleMedium1", freeze_first_row=True, logfile=logfile, screen=False)
+        format_excel_columns(settings["Export"]["overview_month_to_excel"]["filename"],format_numbers, format_columns, logfile, screen=False)
     
     
     values_year_df = df_to_eoy(values_day_df)
@@ -1948,9 +1952,11 @@ def export_overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df
     invest_year_df = df_1D_sum_per_period(invest_day_df, 'year')
 
     overview_year_df = overview(values_year_df, unrealized_gains_losses_year_df, invest_year_df, logfile, screen=screen)
-    export_df_to_excel(overview_year_df, "overview_year_report.xlsx", logfile, screen=False)
-    format_excel_as_table_with_freeze("overview_year_report.xlsx", table_name="Table1", style_name="TableStyleMedium1", freeze_first_row=True, logfile=logfile, screen=False)
-    format_excel_columns("overview_year_report.xlsx",format_numbers, format_columns, logfile, screen=False)
+    if settings["Export"]["overview_year_to_excel"]["enabled"]:
+        export_df_to_excel(overview_year_df, settings["Export"]["overview_year_to_excel"]["filename"], logfile, screen=False)
+    if settings["Export"]["overview_year_to_excel"]["enabled"]:
+        format_excel_as_table_with_freeze(settings["Export"]["overview_year_to_excel"]["filename"], table_name="Table1", style_name="TableStyleMedium1", freeze_first_row=True, logfile=logfile, screen=False)
+        format_excel_columns(settings["Export"]["overview_year_to_excel"]["filename"],format_numbers, format_columns, logfile, screen=False)
 
     return
 
@@ -1992,7 +1998,8 @@ if __name__ == "__main__":
     # 6.2. Reduziere values_day_banks_df auf die Monatsebene
     values_month_banks_df = df_to_eom(values_day_banks_df)
     screen_and_log('Info: Werte (values) daily erfolgreich auf Monatsebene reduziert', logfile, screen=False)
-    if settings['Export']['values_month_banks_to_excel']: export_df_to_excel(values_month_banks_df, "values_month_banks_export.xlsx", logfile, screen=False)
+    if settings["Export"]["values_month_banks_to_excel"]["enabled"]:
+        export_df_to_excel(values_month_banks_df, settings["Export"]["values_month_banks_to_excel"]["filename"], logfile, screen=False)
 
     # 6.3. Aggregiere die Werte in values_month_banks_df über alle Banken
     values_month_df = aggregate_banks(values_month_banks_df)
@@ -2030,19 +2037,22 @@ if __name__ == "__main__":
     bookings_filename = settings['Files']['bookings']
 
     fees_bank_df=fees_import(bookings_filename)
-    export_df_to_excel(fees_bank_df, "fees_bank_export.xlsx", logfile, screen=False)
+    if settings["Export"]["fees_bank_to_excel"]["enabled"]:
+        export_df_to_excel(fees_bank_df, settings["Export"]["fees_bank_to_excel"]["filename"], logfile, screen=False)
     fees_df=aggregate_banks(fees_bank_df)
     export_2D_df_to_excel_format(fees_df, settings["Export"]["fees_to_excel"], logfile, screen=False)
         
     taxes_bank_df=taxes_import(bookings_filename)
-    export_df_to_excel(taxes_bank_df, "taxes_bank_export.xlsx", logfile, screen=False)
+    if settings["Export"]["taxes_bank_to_excel"]["enabled"]:
+        export_df_to_excel(taxes_bank_df, settings["Export"]["taxes_bank_to_excel"]["filename"], logfile, screen=False)
     taxes_df=aggregate_banks(taxes_bank_df)
     
    
     # 7.3. Interests and Dividends aus bookings.xlsx holen
     bookings_filename = settings['Files']['bookings']
     interest_dividends_bank_df=interest_dividends_import(bookings_filename)
-    export_df_to_excel(interest_dividends_bank_df, "interest_dividends_bank_export.xlsx", logfile, screen=False)
+    if settings["Export"]["interest_dividends_bank_to_excel"]["enabled"]:
+        export_df_to_excel(interest_dividends_bank_df, settings["Export"]["interest_dividends_bank_to_excel"]["filename"], logfile, screen=False)
     interest_dividends_df=aggregate_banks(interest_dividends_bank_df)
 
     # 7.3. Transaction_value_at_price (Käufe und Verkäufe zum Kurswert)
@@ -2102,7 +2112,8 @@ if __name__ == "__main__":
     if provisions_month_df is None:
         sys.exit(1)  # Programm beenden, wenn die Provisionsdaten nicht erfolgreich verarbeitet wurden
     if settings['Export']['provisions_month_to_excel']:
-        export_df_to_excel(provisions_month_df, "provisions_month_export.xlsx", logfile, screen=False)
+        if settings["Export"]["provisions_month_to_excel"]["enabled"]:
+            export_df_to_excel(provisions_month_df, settings["Export"]["provisions_month_to_excel"]["filename"], logfile, screen=False)
 
     # 10.2. Anpassung von values_month_df basierend auf provisions_month_df
     #
@@ -2125,7 +2136,8 @@ if __name__ == "__main__":
     
         # 10.5. Rebalancing Vorschlag
         buy_sell_df=values_vs_target(values_month_df, target_shares_df, prices_df, logfile, screen=screen)
-        export_df_to_excel(buy_sell_df, "buy_sell.xlsx", logfile, screen=False)
+        if settings["Export"]["buy_sell_to_excel"]["enabled"]:
+            export_df_to_excel(buy_sell_df, settings["Export"]["buy_sell_to_excel"]["filename"], logfile, screen=False)
 
 
     else:
@@ -2164,15 +2176,18 @@ if __name__ == "__main__":
 
     # 20. Depotauszug pro Bank (in einem File) um Wert und Anzahl bzw. Cash mit Konto-/Depot-Auszug zu vergleichen
     shares_month_banks_df = df_to_eom(shares_day_banks_df)
-    export_bank_analysis_to_excel(shares_month_banks_df, values_month_banks_df, "depotauszug_export.xlsx", logfile, screen=False)
+    if settings["Export"]["depotauszug_to_excel"]["enabled"]:
+        export_bank_analysis_to_excel(shares_month_banks_df, values_month_banks_df, settings["Export"]["depotauszug_to_excel"]["filename"], logfile, screen=False)
 
     # 21. Depots für Finance analysieren und für Import bereitstellen
 
     depots_fuer_finance_df = depots_fuer_finance(values_month_banks_df, logfile, screen=screen)
     if depots_fuer_finance_df is not None:
-        export_df_to_excel(depots_fuer_finance_df, "depots_fuer_finance_report.xlsx", logfile, screen=False)
-        format_excel_as_table_with_freeze("depots_fuer_finance_report.xlsx", logfile, screen=False)
-        format_excel_columns("depots_fuer_finance_report.xlsx",["DD.MM.YY","#,##0.00"],[12,12], logfile, screen=False)
+        if settings["Export"]["depots_fuer_finance_to_excel"]["enabled"]:
+            export_df_to_excel(depots_fuer_finance_df, settings["Export"]["depots_fuer_finance_to_excel"]["filename"], logfile, screen=False)
+        if settings["Export"]["depots_fuer_finance_to_excel"]["enabled"]:
+            format_excel_as_table_with_freeze(settings["Export"]["depots_fuer_finance_to_excel"]["filename"], logfile, screen=False)
+            format_excel_columns(settings["Export"]["depots_fuer_finance_to_excel"]["filename"],["DD.MM.YY","#,##0.00"],[12,12], logfile, screen=False)
 
 
         
