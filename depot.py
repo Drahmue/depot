@@ -1961,7 +1961,7 @@ def export_overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df
 # Hauptprogramm
 if __name__ == "__main__":
     # 1. Initialisierung 
-    settings = initializing('depot_file_settings.ini', screen=False)
+    settings = initializing('depot.ini', screen=False)
     logfile=settings['Files']['logfile']
     screen=settings['Output']['screen']
     
