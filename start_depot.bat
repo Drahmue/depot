@@ -13,6 +13,13 @@ echo LOGFILE=!LOGFILE! >> C:\ProgramData\bat_trace_depot.txt
 
 set PYTHONIOENCODING=utf-8
 
+rem --- Pull latest updates from GitHub ---
+echo [%date% %time%] Pulling updates from GitHub >> "!LOGFILE!"
+git pull origin main >> "!LOGFILE!" 2>&1
+if errorlevel 1 (
+  echo [%date% %time%] Git pull failed, continuing with existing code >> "!LOGFILE!"
+)
+
 rem --- Main script execution ---
 "%CD%\.venv\Scripts\python.exe" -u "depot.py" >> "!LOGFILE!" 2>&1
 set "RC=!ERRORLEVEL!"
