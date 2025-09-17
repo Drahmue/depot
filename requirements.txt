@@ -4,3 +4,4 @@ numpy
 openpyxl
 holidays
 pyarrow
+ahlib

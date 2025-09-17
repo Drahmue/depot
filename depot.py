@@ -12,29 +12,9 @@ import holidays
 
 # ALLGEMEINE FUNKTIONEN
 
-# Standardbiblithek einbinden
-
-# Pfad zur Standardbibliothek
-standard_library_path = r"\\WIN-H7BKO5H0RMC\Dataserver\Programmier Projekte\Python\Standardbibliothek"
-library_name = "Standardfunktionen_aktuell.py"
-
-# Sicherstellen, dass der Pfad existiert
-if not os.path.exists(standard_library_path):
-    sys.exit(f"Fehler: Der Pfad '{standard_library_path}' existiert nicht. Bitte überprüfe die Eingabe.")
-
-# Sicherstellen, dass die Bibliothek existiert
-library_full_path = os.path.join(standard_library_path, library_name)
-if not os.path.isfile(library_full_path):
-    sys.exit(f"Fehler: Die Bibliothek '{library_name}' wurde im Pfad '{standard_library_path}' nicht gefunden.")
-
-# Pfad zum Suchpfad hinzufügen
-sys.path.insert(0, standard_library_path)
-
-# Bibliothek importieren
+# ahlib einbinden
 try:
-    import Standardfunktionen_aktuell
-    importlib.reload(Standardfunktionen_aktuell)
-    from Standardfunktionen_aktuell import (
+    from ahlib import (
         screen_and_log,
         export_2D_df_to_excel_clean_table,
         format_excel_as_table_with_freeze,
@@ -45,9 +25,9 @@ try:
         export_df_to_excel,
         import_parquet
     )
-    print(f"Import der Bibliothek: {library_name} von {standard_library_path} erfolgreich")
+    print("Import der ahlib Bibliothek erfolgreich")
 except ImportError as e:
-    sys.exit(f"Fehler beim Import der Bibliothek: {e}")
+    sys.exit(f"Fehler beim Import der ahlib Bibliothek: {e}")
 
 
 # Umrechnung eines 2D Dataframes mit Datum als Index in die Prozentwerte "Spaltenwert / Summe über alle Spalten"
