@@ -15,7 +15,8 @@ import holidays
 # ahlib einbinden
 try:
     from ahlib import (
-        screen_and_log,
+        create_extended_logger,
+        ExtendedLogger,
         export_2D_df_to_excel_clean_table,
         format_excel_as_table_with_freeze,
         format_excel_columns,
@@ -250,7 +251,7 @@ def df_1D_sum_per_period(df_input, period='month'):
 
     return merged[[value_col]]
 
-def function_result(function_name, error_count, warning_count, logfile, screen=True):
+def function_result(function_name, error_count, warning_count, logger):
     """
     Überprüft die Rückgabewerte einer Funktion und gibt eine entsprechende Meldung aus.
     Beendet das Programm, wenn Fehler aufgetreten sind.
@@ -259,23 +260,21 @@ def function_result(function_name, error_count, warning_count, logfile, screen=T
         function_name (str): Der Name der aufgerufenen Funktion.
         error_count (int): Anzahl der aufgetretenen Fehler.
         warning_count (int): Anzahl der aufgetretenen Warnungen.
-        logfile (str): Der Name des Logfiles.
-        screen (bool): Wenn True, werden Bildschirmmeldungen angezeigt.
-        log (bool): Wenn True, werden Meldungen ins Logfile geschrieben.
+        logger (ExtendedLogger): Logger instance.
     """
     # Überprüfung der Rückgabewerte für Fehler und Warnugen
     if error_count > 0:
-        screen_and_log(f"ERROR: {function_name} fehlgeschlagen. Das Programm wird beendet.", logfile, screen=True)
+        logger.error(f"{function_name} fehlgeschlagen. Das Programm wird beendet.")
         sys.exit(1)
     elif warning_count > 0:
-        screen_and_log(f"WARNING: {function_name} abgeschlossen mit {warning_count} Warnung(en).", logfile, screen=True)
+        logger.warning(f"{function_name} abgeschlossen mit {warning_count} Warnung(en).")
     else:
-        screen_and_log(f"Info: {function_name} erfolgreich abgeschlossen.", logfile, screen=True)
+        logger.info(f"{function_name} erfolgreich abgeschlossen.")
 
-def export_2D_df_to_excel_format(df, export, logfile, screen=False):
+def export_2D_df_to_excel_format(df, export, logger):
     """
     Exportiert einen datframe mit 2D Multindex nach Excel als Tablle mit Formaten
-    
+
     erwartet in export ein Dicutionary mit enabled, filename, list von format strings, liste von spalten breiten
 
     """
@@ -286,9 +285,9 @@ def export_2D_df_to_excel_format(df, export, logfile, screen=False):
     format_columns = export.get("column_widths", {})
 
     if enabled:
-        export_2D_df_to_excel_clean_table(df, filename, logfile, screen=screen)
-        format_excel_as_table_with_freeze(filename, table_name="Table1", style_name="TableStyleMedium1", freeze_first_row=True, logfile=logfile, screen=screen)
-        format_excel_columns(filename,format_numbers, format_columns, logfile, screen=screen)
+        export_2D_df_to_excel_clean_table(df, filename, str(logger.log_file), screen=logger.screen_output)
+        format_excel_as_table_with_freeze(filename, table_name="Table1", style_name="TableStyleMedium1", freeze_first_row=True, logfile=str(logger.log_file), screen=logger.screen_output)
+        format_excel_columns(filename,format_numbers, format_columns, str(logger.log_file), screen=logger.screen_output)
 
     return
 
@@ -298,12 +297,12 @@ def export_2D_df_to_excel_format(df, export, logfile, screen=False):
 
 # Spezifische Funktionen
 # Funktion die aus dem instruments file (EXCEL) die Schlüssel wkn, ticker, Name und Default Wert lädet
-def instruments_import(filename, logfile, screen=True):
+def instruments_import(filename, logger):
     """
     Liest die Excel-Datei und importiert die ersten vier Spalten (wkn, ticker, instrument_name, Default)
     in einen Pandas DataFrame. wkn und ticker werden in Kleinbuchstaben umgewandelt.
     wkn wird als Index gesetzt. Spaltennamen werden auf 'ticker', 'Name', 'default_value' gesetzt.
-    
+
     Fehlerabfrage: Wenn die Datei kein Excel-Format hat oder ein anderer Fehler auftritt, wird eine Meldung ausgegeben.
     """
     try:
@@ -325,17 +324,17 @@ def instruments_import(filename, logfile, screen=True):
         return df
 
     except FileNotFoundError:
-        screen_and_log(f"ERROR: Die Datei '{filename}' wurde nicht gefunden.", logfile, screen=screen)
+        logger.error(f"Die Datei '{filename}' wurde nicht gefunden.")
         return None
     except ValueError as ve:
-        screen_and_log(f"ERROR: {ve}", logfile, screen=screen)
+        logger.error(f"{ve}")
         return None
     except Exception as e:
-        screen_and_log(f"ERROR: Ein Fehler ist aufgetreten: {e}", logfile, screen=screen)
+        logger.error(f"Ein Fehler ist aufgetreten: {e}")
         return None
 
 # Funktion die aus dem instruments file (EXCEL) die Spalten mit relativen Anteilen für Detailanalysen lädet
-def instruments_details_import(filename, search_param, logfile, screen=True):
+def instruments_details_import(filename, search_param, logger):
     """
     Liest die Excel-Datei und importiert die 'wkn'-Spalte und alle Spalten, deren Namen mit dem Suchparameter beginnen,
     in einen Pandas DataFrame. Der MultiIndex besteht aus 'wkn' und dem in Kleinbuchstaben übergebenen Suchparameter,
@@ -384,17 +383,17 @@ def instruments_details_import(filename, search_param, logfile, screen=True):
         return df
 
     except FileNotFoundError:
-        screen_and_log(f"ERROR: Die Datei '{filename}' wurde nicht gefunden.", logfile, screen=screen)
+        logger.error(f"Die Datei '{filename}' wurde nicht gefunden.")
         return None
     except ValueError as ve:
-        screen_and_log(f"ERROR: {ve}", logfile, screen=screen)
+        logger.error(f"{ve}")
         return None
     except Exception as e:
-        screen_and_log(f"ERROR: Ein Fehler ist aufgetreten: {e}", logfile, screen=screen)
+        logger.error(f"Ein Fehler ist aufgetreten: {e}")
         return None
        
 # Funktion zum gegenseitigen Abgleich ob alle wkn in prices und instrumentes enthalten sind
-def prices_check_for_instruments(prices, instruments, logfile, screen=True):
+def prices_check_for_instruments(prices, instruments, logger):
     """
     Überprüft, ob alle WKNs aus 'prices' im DataFrame 'instruments' vorhanden sind und umgekehrt.
     
@@ -410,18 +409,18 @@ def prices_check_for_instruments(prices, instruments, logfile, screen=True):
 
     missing_in_instruments = wkn_prices - wkn_instruments
     if missing_in_instruments:
-        screen_and_log(f"WARNING: Die folgenden WKNs aus 'prices' fehlen in 'instruments': {missing_in_instruments}", logfile, screen=screen)
+        logger.warning(f"Die folgenden WKNs aus 'prices' fehlen in 'instruments': {missing_in_instruments}")
     else:
-        screen_and_log("Info: Alle WKNs aus 'prices' sind in 'instruments' vorhanden.", logfile, screen=screen)
+        logger.info("Alle WKNs aus 'prices' sind in 'instruments' vorhanden.")
 
     missing_in_prices = wkn_instruments - wkn_prices
     if missing_in_prices:
-        screen_and_log(f"WARNING: Die folgenden WKNs aus 'instruments' fehlen in 'prices': {missing_in_prices}", logfile, screen=screen)
+        logger.warning(f"Die folgenden WKNs aus 'instruments' fehlen in 'prices': {missing_in_prices}")
     else:
-        screen_and_log("Info: Alle WKNs aus 'instruments' sind in 'prices' vorhanden.", logfile, screen=screen)
+        logger.info("Alle WKNs aus 'instruments' sind in 'prices' vorhanden.")
 
 # Funktion zum Aktualisieren der Kursdaten zwischen last_date und gestern
-def prices_update(prices, instruments, logfile, screen=True):
+def prices_update(prices, instruments, logger):
     """
     Aktualisiert fehlende Kursdaten in 'prices' zwischen dem letzten Datum und gestern,
     wobei nur Handelstage (Mo–Fr, ohne Feiertage) berücksichtigt werden.
@@ -429,8 +428,7 @@ def prices_update(prices, instruments, logfile, screen=True):
     Parameter:
         prices (DataFrame): Bestehende Kursdaten. MultiIndex ('date', 'wkn'), Spalte 'price'
         instruments (DataFrame): Enthält je WKN einen 'ticker' und optional 'default_value'
-        logfile (str): Pfad zur Logdatei
-        screen (bool): Gibt Statusmeldungen auf dem Bildschirm aus, falls True
+        logger (ExtendedLogger): Logger instance for output and logging.
 
     Rückgabe:
         DataFrame: Aktualisierter 'prices'-DataFrame
@@ -452,10 +450,7 @@ def prices_update(prices, instruments, logfile, screen=True):
     missing_dates = [d for d in all_dates if d.weekday() < 5 and d.strftime('%Y-%m-%d') not in de_holidays]
 
     if not missing_dates:
-        screen_and_log(
-            f"Info: Keine fehlenden Handelstage zwischen {last_date.date()} und {yesterday.date()}",
-            logfile, screen=screen
-        )
+        logger.info(f"Keine fehlenden Handelstage zwischen {last_date.date()} und {yesterday.date()}")
         return prices
 
     # Für jede WKN einzeln Kursdaten abrufen
@@ -485,9 +480,8 @@ def prices_update(prices, instruments, logfile, screen=True):
                 )
 
                 if data.empty:
-                    screen_and_log(
-                        f"WARNING: Keine Daten für Ticker {ticker} im Zeitraum {missing_dates[0].date()} bis {missing_dates[-1].date()}",
-                        logfile, screen=screen
+                    logger.warning(
+                        f"Keine Daten für Ticker {ticker} im Zeitraum {missing_dates[0].date()} bis {missing_dates[-1].date()}"
                     )
                     continue
 
@@ -511,21 +505,18 @@ def prices_update(prices, instruments, logfile, screen=True):
 
                     except KeyError:
                         prices.loc[(normalized_date, wkn), 'price'] = np.nan
-                        screen_and_log(
-                            f"WARNING: Kein Kurs für {ticker} am {normalized_date.date()} verfügbar",
-                            logfile, screen=screen
+                        logger.warning(
+                            f"Kein Kurs für {ticker} am {normalized_date.date()} verfügbar"
                         )
 
                     except Exception as e:
-                        screen_and_log(
-                            f"ERROR: Unerwarteter Fehler bei Zugriff auf Close-Wert {ticker} am {normalized_date.date()}: {e}",
-                            logfile, screen=screen
+                        logger.error(
+                            f"Unerwarteter Fehler bei Zugriff auf Close-Wert {ticker} am {normalized_date.date()}: {e}"
                         )
 
             except Exception as e:
-                screen_and_log(
-                    f"ERROR: Fehler beim Abrufen der Daten am {missing_dates[0]} für WKN {wkn} ({ticker}): {e}",
-                    logfile, screen=screen
+                logger.error(
+                    f"Fehler beim Abrufen der Daten am {missing_dates[0]} für WKN {wkn} ({ticker}): {e}"
                 )
 
         else:
@@ -537,145 +528,145 @@ def prices_update(prices, instruments, logfile, screen=True):
     return prices
 
 # Funktion zum Einlesen der Buchungsdaten
-def bookings_import(filename):
+def bookings_import(filename, logger):
     try:
         # Lese die ersten vier Spalten aus der Excel-Datei
         df = pd.read_excel(filename, usecols=[0, 1, 2, 3], names=['date', 'wkn', 'bank', 'delta'])
-        
+
         # Konvertiere 'wkn' und 'bank' in Kleinbuchstaben
         df['wkn'] = df['wkn'].str.lower()
         df['bank'] = df['bank'].str.lower()
-        
+
         # Entferne Zeilen mit NaN in 'wkn', 'bank' oder 'delta'
         df.dropna(subset=['wkn', 'bank', 'delta'], inplace=True)
-        
+
         # Setze den MultiIndex auf 'date', 'wkn', 'bank'
         df.set_index(['date', 'wkn', 'bank'], inplace=True)
-        
+
         # Fasse Einträge mit demselben MultiIndex zusammen und summiere 'delta'
         # Damit werden mehrere Transaktion an einem Tag für eine WKN (bei der gleichen bank) zu einem Eintrag kombiniert
         df = df.groupby(level=['date', 'wkn', 'bank']).sum()
-        
+
         return df
 
     except FileNotFoundError:
-        screen_and_log(f"Fehler: Die Datei '{filename}' wurde nicht gefunden.", logfile, screen=screen)
+        logger.error(f"Die Datei '{filename}' wurde nicht gefunden.")
         return None
     except Exception as e:
-        screen_and_log(f"Ein Fehler ist beim Import der Buchungen aus '{filename}' aufgetreten: {e}", logfile, screen=screen)
+        logger.error(f"Ein Fehler ist beim Import der Buchungen aus '{filename}' aufgetreten: {e}")
         return None
     
-def fees_import(filename):
+def fees_import(filename, logger):
     try:
         # Lese die ersten vier Spalten aus der Excel-Datei
         df = pd.read_excel(filename, usecols=[0, 1, 2, 5], names=['date', 'wkn', 'bank', 'delta', 'invest_divest', 'fees'])
-        
+
         # Konvertiere 'wkn' und 'bank' in Kleinbuchstaben
         df['wkn'] = df['wkn'].str.lower()
         df['bank'] = df['bank'].str.lower()
-        
+
         # Entferne Zeilen mit NaN in 'wkn', 'bank' oder 'fees'
         df.dropna(subset=['wkn', 'bank', 'fees'], inplace=True)
-        
+
         # Setze den MultiIndex auf 'date', 'wkn', 'bank'
         df.set_index(['date', 'wkn', 'bank'], inplace=True)
-        
+
         # Fasse Einträge mit demselben MultiIndex zusammen und summiere die Wert-Spalte
         # Damit werden mehrere Transaktion an einem Tag für eine WKN (bei der gleichen bank) zu einem Eintrag kombiniert
         df = df.groupby(level=['date', 'wkn', 'bank']).sum()
-        
+
         return df
 
     except FileNotFoundError:
-        screen_and_log(f"Fehler: Die Datei '{filename}' wurde nicht gefunden.", logfile, screen=screen)
+        logger.error(f"Die Datei '{filename}' wurde nicht gefunden.")
         return None
     except Exception as e:
-        screen_and_log(f"Ein Fehler ist beim Import Fees aus '{filename}' aufgetreten: {e}", logfile, screen=screen)
+        logger.error(f"Ein Fehler ist beim Import Fees aus '{filename}' aufgetreten: {e}")
         return None    
 
-def taxes_import(filename):
+def taxes_import(filename, logger):
     try:
         # Lese die ersten vier Spalten aus der Excel-Datei
         df = pd.read_excel(filename, usecols=[0, 1, 2, 6], names=['date', 'wkn', 'bank', 'delta', 'invest_divest', 'fees', 'taxes'])
-        
+
         # Konvertiere 'wkn' und 'bank' in Kleinbuchstaben
         df['wkn'] = df['wkn'].str.lower()
         df['bank'] = df['bank'].str.lower()
-        
+
         # Entferne Zeilen mit NaN in 'wkn', 'bank' oder 'taxes'
         df.dropna(subset=['wkn', 'bank', 'taxes'], inplace=True)
-        
+
         # Setze den MultiIndex auf 'date', 'wkn', 'bank'
         df.set_index(['date', 'wkn', 'bank'], inplace=True)
-        
+
         # Fasse Einträge mit demselben MultiIndex zusammen und summiere die Wert-Spalte
         # Damit werden mehrere Transaktion an einem Tag für eine WKN (bei der gleichen bank) zu einem Eintrag kombiniert
         df = df.groupby(level=['date', 'wkn', 'bank']).sum()
-        
+
         return df
 
     except FileNotFoundError:
-        screen_and_log(f"Fehler: Die Datei '{filename}' wurde nicht gefunden.", logfile, screen=screen)
+        logger.error(f"Die Datei '{filename}' wurde nicht gefunden.")
         return None
     except Exception as e:
-        screen_and_log(f"Ein Fehler ist beim Import Taxes aus '{filename}' aufgetreten: {e}", logfile, screen=screen)
+        logger.error(f"Ein Fehler ist beim Import Taxes aus '{filename}' aufgetreten: {e}")
         return None    
 
-def interest_dividends_import(filename):
+def interest_dividends_import(filename, logger):
     try:
         # Lese die ersten vier Spalten aus der Excel-Datei
         df = pd.read_excel(filename, usecols=[0, 1, 2, 8], names=['date', 'wkn', 'bank', 'delta', 'invest_divest', 'fees', 'taxes', 'transaction_value_at_price', 'interest_dividends'])
-        
+
         # Konvertiere 'wkn' und 'bank' in Kleinbuchstaben
         df['wkn'] = df['wkn'].str.lower()
         df['bank'] = df['bank'].str.lower()
-        
+
         # Entferne Zeilen mit NaN in 'wkn', 'bank' oder 'interest_dividends'
         df.dropna(subset=['wkn', 'bank', 'interest_dividends'], inplace=True)
-        
+
         # Setze den MultiIndex auf 'date', 'wkn', 'bank'
         df.set_index(['date', 'wkn', 'bank'], inplace=True)
-        
+
         # Fasse Einträge mit demselben MultiIndex zusammen und summiere die Wert-Spalte
         # Damit werden mehrere Transaktion an einem Tag für eine WKN (bei der gleichen bank) zu einem Eintrag kombiniert
         df = df.groupby(level=['date', 'wkn', 'bank']).sum()
-        
+
         return df
 
     except FileNotFoundError:
-        screen_and_log(f"Fehler: Die Datei '{filename}' wurde nicht gefunden.", logfile, screen=screen)
+        logger.error(f"Die Datei '{filename}' wurde nicht gefunden.")
         return None
     except Exception as e:
-        screen_and_log(f"Ein Fehler ist beim Import Interst and Dividends aus '{filename}' aufgetreten: {e}", logfile, screen=screen)
+        logger.error(f"Ein Fehler ist beim Import Interst and Dividends aus '{filename}' aufgetreten: {e}")
         return None    
 
-def transaction_value_at_price_import(filename):
+def transaction_value_at_price_import(filename, logger):
     try:
         # Lese die ersten vier Spalten aus der Excel-Datei
         df = pd.read_excel(filename, usecols=[0, 1, 2, 7], names=['date', 'wkn', 'bank', 'delta', 'invest_divest', 'fees', 'taxes', 'transaction_value_at_price', 'interest_dividends'])
-        
+
         # Konvertiere 'wkn' und 'bank' in Kleinbuchstaben
         df['wkn'] = df['wkn'].str.lower()
         df['bank'] = df['bank'].str.lower()
-        
+
         # Entferne Zeilen mit NaN in 'wkn', 'bank' oder 'interest_dividends'
         df.dropna(subset=['wkn', 'bank', 'transaction_value_at_price'], inplace=True)
-        
+
         # Setze den MultiIndex auf 'date', 'wkn', 'bank'
         df.set_index(['date', 'wkn', 'bank'], inplace=True)
-        
+
         # Fasse Einträge mit demselben MultiIndex zusammen und summiere die Wert-Spalte
         # Damit werden mehrere Transaktion an einem Tag für eine WKN (bei der gleichen bank) zu einem Eintrag kombiniert
         df = df.groupby(level=['date', 'wkn', 'bank']).sum()
-        
+
         return df
 
     except FileNotFoundError:
-        screen_and_log(f"Fehler: Die Datei '{filename}' wurde nicht gefunden.", logfile, screen=screen)
+        logger.error(f"Die Datei '{filename}' wurde nicht gefunden.")
         return None
     except Exception as e:
-       screen_and_log(f"Ein Fehler ist beim Import Interst and Dividends aus '{filename}' aufgetreten: {e}", logfile, screen=screen)
-    return None    
+        logger.error(f"Ein Fehler ist beim Import Interst and Dividends aus '{filename}' aufgetreten: {e}")
+        return None    
 
 # Funktion zum Prüfung ob alle WKN in Buchungsdaten in Instruments gelistet sind
 def bookings_check_for_instruments(bookings, instruments):
@@ -699,7 +690,7 @@ def bookings_check_for_instruments(bookings, instruments):
     return missing_in_instruments
 
 # Funktion zur Umsetzung der Buchungen in ein Bestandsfile für alle Tage
-def shares_from_bookings(bookings, end_date, logfile, screen=False):
+def shares_from_bookings(bookings, end_date, logger):
     """
     Erweitert den DataFrame `bookings` mit allen Kombinationen von Datum, wkn und Bank
     bis zu einem angegebenen Enddatum und berechnet die laufende Summe.
@@ -732,7 +723,7 @@ def shares_from_bookings(bookings, end_date, logfile, screen=False):
     # Benenne die Spalte 'delta' in 'share' um
     bookings_expanded.rename(columns={'delta': 'share'}, inplace=True)
 
-    screen_and_log('Info: Positionen (shares) auf Tagesbasis erfolgreich aufgebaut', logfile, screen=screen)
+    logger.info('Positionen (shares) auf Tagesbasis erfolgreich aufgebaut')
     
     return bookings_expanded
 
@@ -887,15 +878,16 @@ def realized_gains_losses_day(fees_df, taxes_df, interests_dividends_df):
     # Nur die Ergebnis-Spalte zurückgeben
     return combined_df[['realized_gains_losses']]
 
-def invest_day(filename, start_date, end_date):
+def invest_day(filename, start_date, end_date, logger):
     """
-    Liest die Buchungsdaten aus der angegebenen Datei ein und verarbeitet sie, um Investitionsdaten (Einschuss/Entnahme) 
+    Liest die Buchungsdaten aus der angegebenen Datei ein und verarbeitet sie, um Investitionsdaten (Einschuss/Entnahme)
     für jeden Tag innerhalb des Zeitraums von start_date bis end_date zu erhalten.
 
     Parameter:
         filename (str): Der Dateipfad zur Excel-Datei.
         start_date (str oder datetime): Das Startdatum für den erweiterten Datumsbereich.
         end_date (str oder datetime): Das Enddatum für den erweiterten Datumsbereich.
+        logger (ExtendedLogger): Logger instance for output and logging.
 
     Rückgabe:
         DataFrame: Ein DataFrame mit dem Index 'date' und einer Spalte 'invest', die die täglichen Investitionswerte enthält.
@@ -903,33 +895,33 @@ def invest_day(filename, start_date, end_date):
     try:
         # Lese die Spalten 'date', 'delta' und 'invest_divest' aus der Datei ein
         df = pd.read_excel(filename, usecols=['date', 'delta', 'invest_divest'])
-        
+
         # Setze die Spalte 'date' als Index
         df.set_index('date', inplace=True)
-        
+
         # Entferne alle Zeilen ohne Eintrag in der Spalte 'invest_divest'
         df = df.dropna(subset=['invest_divest'])
-        
+
         # Lösche die Spalte 'invest_divest'
         df.drop(columns='invest_divest', inplace=True)
-        
+
         # Aggregiere doppelte Datumswerte, indem die 'delta'-Werte summiert werden
         df = df.groupby('date').sum()
-        
+
         # Erweitere den DataFrame auf den gesamten Datumsbereich von start_date bis end_date
         all_dates = pd.date_range(start=start_date, end=end_date)
         df = df.reindex(all_dates, fill_value=0)
-        
+
         # Benenne die Spalte 'delta' in 'invest' um
         df.rename(columns={'delta': 'invest'}, inplace=True)
-        
+
         return df
-    
+
     except FileNotFoundError:
-        screen_and_log(f"Fehler: Die Datei '{filename}' wurde nicht gefunden (invest_day).", logfile, screen=screen)
+        logger.error(f"Die Datei '{filename}' wurde nicht gefunden (invest_day).")
         return None
     except Exception as e:
-        screen_and_log(f"Ein Fehler ist aufgetreten: {e} (invest_day)", logfile, screen=screen)
+        logger.error(f"Ein Fehler ist aufgetreten: {e} (invest_day)")
         return None
 
 def values_type_month(values_month, instruments_type):
@@ -969,7 +961,7 @@ def values_type_month(values_month, instruments_type):
 
     return result_df
 
-def values_region_month(values_month, instruments_region):
+def values_region_month(values_month, instruments_region, logger):
     """
     Berechnet den monatlichen Wert pro Region auf Basis der Daten in values_month und instruments_region.
     Entfernt die laufende Nummer, lässt nur die spezifische Region in der Spalte 'region' stehen.
@@ -977,7 +969,8 @@ def values_region_month(values_month, instruments_region):
     Parameter:
         values_month (DataFrame): DataFrame mit MultiIndex (date, wkn) und Spalte 'value'.
         instruments_region (DataFrame): DataFrame mit MultiIndex (wkn, region) und Spalte 'share'.
-    
+        logger (ExtendedLogger): Logger instance for output and logging.
+
     Rückgabe:
         DataFrame: Ein DataFrame mit MultiIndex (date, region) und Spalte 'region_value'.
     """
@@ -1000,7 +993,7 @@ def values_region_month(values_month, instruments_region):
 
     # Gruppiere nach 'date' und 'region', und summiere 'region_value'
     if 'reg' not in merged_df.columns:
-        screen_and_log("Fehler: Keine Spalten mit 'reg' gefunden. Bitte prüfen Sie die Eingabedaten.", logfile, screen=screen)
+        logger.error("Keine Spalten mit 'reg' gefunden. Bitte prüfen Sie die Eingabedaten.")
         return None
     
     result_df = merged_df.groupby(['date', 'reg'])['region_value'].sum().reset_index()
@@ -1011,7 +1004,7 @@ def values_region_month(values_month, instruments_region):
     return result_df
 
 # Tagespofitabilität aus Wertänderung der Tageswert
-def yield_day_from_values_day(gains_losses_before_fees_taxes_day_df, values_day_df):
+def yield_day_from_values_day(gains_losses_before_fees_taxes_day_df, values_day_df, logger):
 
     """
     Berechnet die tägliche Rendite (Yield) pro WKN und Tag.
@@ -1019,7 +1012,8 @@ def yield_day_from_values_day(gains_losses_before_fees_taxes_day_df, values_day_
     Parameter:
         unrealized_gains_losses_day (DataFrame): DataFrame mit MultiIndex (date, wkn) und Spalte 'unrealized_gains_losses'.
         values_day (DataFrame): DataFrame mit MultiIndex (date, wkn) und Spalte 'value'.
-        
+        logger (ExtendedLogger): Logger instance for output and logging.
+
     Rückgabe:
         DataFrame: DataFrame mit MultiIndex (date, wkn) und Spalte 'yield', die die tägliche Rendite angibt.
     """
@@ -1040,12 +1034,12 @@ def yield_day_from_values_day(gains_losses_before_fees_taxes_day_df, values_day_
         return yield_series.to_frame(name='yield')
     
     except Exception as e:
-        screen_and_log(f"ERROR: Fehler beim Berechnen der täglichen Profitabilität: {e}", logfile, screen=screen)
+        logger.error(f"Fehler beim Berechnen der täglichen Profitabilität: {e}")
         return None
 
 
 # Kumulierte Jahres Profitabilität über TWR Formel: (Produkt Reihe (1+Tagesprofitabilität))-1
-def yield_year_from_values_day(yield_excl_div_day, values_day):
+def yield_year_from_values_day(yield_excl_div_day, values_day, logger):
     """
     Berechnet die kumulierte Rendite vom ersten bis zum letzten Tag eines Jahres je WKN.
     Gruppiert wird nach dem jeweils letzten berücksichtigten Datum je Jahr und WKN.
@@ -1053,6 +1047,7 @@ def yield_year_from_values_day(yield_excl_div_day, values_day):
     Parameter:
         yield_excl_div_day (DataFrame): MultiIndex (date, wkn), Spalte 'yield'
         values_day (DataFrame): MultiIndex (date, wkn), Spalte 'value'
+        logger (ExtendedLogger): Logger instance for output and logging.
 
     Rückgabe:
         DataFrame: MultiIndex (last_date_per_year, wkn), Spalte 'annual_yield'
@@ -1096,7 +1091,7 @@ def yield_year_from_values_day(yield_excl_div_day, values_day):
         return result.to_frame(name='annual_yield')
 
     except Exception as e:
-        screen_and_log(f"ERROR: Fehler beim Berechnen der jährlichen kumulierten Rendite: {e}", logfile, screen=screen)
+        logger.error(f"Fehler beim Berechnen der jährlichen kumulierten Rendite: {e}")
         return None
 
 
@@ -1121,34 +1116,42 @@ def initializing(settings_file, screen):
     screen = True # Debug   
 
     # 1. Arbeitsverzeichnis setzen, kann auch einen benutzerdefinierten Pfad akzeptieren
-    try:   
+    try:
         set_working_directory("default",logfile=None,screen=screen)
-        screen_and_log("Info: Arbeitsverzeichnis initial auf Ausführungsordner gesetzt.",logfile=None,screen=screen) # Logfile noch nicht initialisiert 
+        if screen:
+            print("Info: Arbeitsverzeichnis initial auf Ausführungsordner gesetzt.")
     except Exception as e:
-        screen_and_log(f"ERROR: Fehler beim Setzen des Arbeitsverzeichnisses: {e}",logfile=None,screen=screen) # Logfile noch nicht initialisiert
+        if screen:
+            print(f"ERROR: Fehler beim Setzen des Arbeitsverzeichnisses: {e}")
         error_count += 1
         # Fehlerergebnis melden und beenden
-        function_result("Initialisierung", error_count, warning_count, logfile=None, screen=screen)
+        if screen:
+            print("ERROR: Initialisierung fehlgeschlagen. Das Programm wird beendet.")
         return None
 
     # 2. Einstellungen aus der Datei 'depot_file_settings.txt' lesen
     settings = settings_import(settings_file)
     if settings is None:
-        screen_and_log("ERROR: Einstellungen konnten nicht geladen werden.",logfile=None,screen=screen) # Logfile noch nicht initialisiert
+        if screen:
+            print("ERROR: Einstellungen konnten nicht geladen werden.")
         error_count += 1
         # Fehlerergebnis melden und beenden
-        function_result("Initialisierung", error_count, warning_count, logfile=None, screen=screen)
+        if screen:
+            print("ERROR: Initialisierung fehlgeschlagen. Das Programm wird beendet.")
         return None
-    
+
     # 3. Arbeitsverzeichnis auf Einstellung aus Settings setzen
     try:
         set_working_directory((settings or {}).get('Paths', {}).get('path', ''),logfile=None,screen=screen)
-        screen_and_log("Info: Arbeitsverzeichnis erfolgreich gesetzt.",logfile=None,screen=screen) # Logfile noch nicht initialisiert
+        if screen:
+            print("Info: Arbeitsverzeichnis erfolgreich gesetzt.")
     except Exception as e:
-        screen_and_log(f"ERROR: Fehler beim Setzen des Arbeitsverzeichnisses: {e}",logfile=None,screen=screen) # Logfile noch nicht initialisiert
+        if screen:
+            print(f"ERROR: Fehler beim Setzen des Arbeitsverzeichnisses: {e}")
         error_count += 1
         # Fehlerergebnis melden und beenden
-        function_result("Initialisierung", error_count, warning_count, logfile=None, screen=screen)
+        if screen:
+            print("ERROR: Initialisierung fehlgeschlagen. Das Programm wird beendet.")
         return None
 
     # 4.1. Logfile-Pfad aus den Einstellungen extrahieren
@@ -1157,16 +1160,19 @@ def initializing(settings_file, screen):
     # 4.2. Prüfen, ob logfile None ist, und ggf. auf Standard setzen
     if logfile is None:
         logfile = 'logfile.txt'
-        screen_and_log("ERROR: Kein Logfile angegeben. Fallback auf 'logfile.txt'.", logfile, screen=screen)
+        if screen:
+            print("ERROR: Kein Logfile angegeben. Fallback auf 'logfile.txt'.")
 
     # 4.3. Prüfen, ob logfile existiert; wenn nicht, die Datei mit UTF-8 anlegen
     if not os.path.exists(logfile):
         try:
             with open(logfile, 'w', encoding='utf-8') as log_file:
                 log_file.write("")  # Leere Datei anlegen
-            screen_and_log(f"Info: Logfile '{logfile}' wurde neu angelegt.", logfile, screen=screen)
+            if screen:
+                print(f"Info: Logfile '{logfile}' wurde neu angelegt.")
         except Exception as e:
-            screen_and_log(f"ERROR: Logfile '{logfile}' konnte nicht erstellt werden: {e}", logfile, screen=screen)
+            if screen:
+                print(f"ERROR: Logfile '{logfile}' konnte nicht erstellt werden: {e}")
             error_count += 1
 
 
@@ -1174,17 +1180,28 @@ def initializing(settings_file, screen):
     # 5. Überprüfen, ob die erforderlichen Dateien verfügbar sind
     file_list = list(settings['Files'].values())
     if not files_availability_check(file_list, logfile, screen=screen):
-        screen_and_log("ERROR: Eine oder mehrere Dateien fehlen.", logfile, screen=screen)
+        if screen:
+            print("ERROR: Eine oder mehrere Dateien fehlen.")
         error_count += 1
     else:
-        screen_and_log("Info: Alle Dateien verfügbar und erfolgreich geladen.", logfile, screen=screen)
+        if screen:
+            print("Info: Alle Dateien verfügbar und erfolgreich geladen.")
 
-    # Aufruf von function_result vor der Rückgabe
-    function_result("Initialisierung", error_count, warning_count, logfile, screen=screen)
+    # Ergebnis ausgeben
+    if error_count > 0:
+        if screen:
+            print("ERROR: Initialisierung fehlgeschlagen. Das Programm wird beendet.")
+        sys.exit(1)
+    elif warning_count > 0:
+        if screen:
+            print(f"WARNING: Initialisierung abgeschlossen mit {warning_count} Warnung(en).")
+    else:
+        if screen:
+            print("Info: Initialisierung erfolgreich abgeschlossen.")
     return settings
 
 # Main Block 02: Instrumente importieren
-def instruments_import_and_process(settings, logfile, screen=True):
+def instruments_import_and_process(settings, logger):
     """
     Importiert und verarbeitet die Instrumentendaten, indem die Haupt-Instruments-Datei, die Regions-Daten und die
     Typen-Daten eingelesen werden. Überprüft, ob die Dateien korrekt geladen wurden.
@@ -1208,37 +1225,34 @@ def instruments_import_and_process(settings, logfile, screen=True):
     try:
         # 2.1 Instruments-Datei importieren
         instruments_file = (settings or {}).get('Files', {}).get('instruments', '')
-        instruments_df = instruments_import(instruments_file, logfile, screen=screen)
+        instruments_df = instruments_import(instruments_file, logger)
 
         if instruments_df is None:
-            screen_and_log(f"ERROR: Fehler beim Import der Instruments-Datei '{instruments_file}'.", logfile, screen=screen)
+            logger.error(f"Fehler beim Import der Instruments-Datei '{instruments_file}'.")
             error_count += 1
-            function_result("Instruments-Import und -Verarbeitung", error_count, warning_count, logfile, screen=screen)
             return None, None, None
         
-        screen_and_log("Info: Instruments-Datei erfolgreich importiert.", logfile, screen=screen)
+        logger.info("Instruments-Datei erfolgreich importiert.")
 
         # 2.2 Instruments-Region-Daten importieren
-        instruments_region_df = instruments_details_import(instruments_file, search_param="Reg", logfile=logfile, screen=screen)
+        instruments_region_df = instruments_details_import(instruments_file, search_param="Reg", logger=logger)
 
         if instruments_region_df is None:
-            screen_and_log("ERROR: Eine oder mehrere WKN-Zeilen in 'instruments_region_df' ergeben nicht 100% .", logfile)
+            logger.error("Eine oder mehrere WKN-Zeilen in 'instruments_region_df' ergeben nicht 100% .")
             error_count += 1
-            function_result("Instruments-Import und -Verarbeitung", error_count, warning_count, logfile, screen=screen)
             return None, None, None
 
-        screen_and_log("Info: Instruments-Region-Daten erfolgreich importiert.", logfile, screen=screen)
+        logger.info("Instruments-Region-Daten erfolgreich importiert.")
 
         # 2.3 Instruments-Type-Daten importieren
-        instruments_type_df = instruments_details_import(instruments_file, search_param="Type", logfile=logfile, screen=screen)
+        instruments_type_df = instruments_details_import(instruments_file, search_param="Type", logger=logger)
 
         if instruments_type_df is None:
-            screen_and_log("ERROR: Eine oder mehrere WKN-Zeilen in 'instruments_type_df' ergeben nicht 100%.", logfile)
+            logger.error("Eine oder mehrere WKN-Zeilen in 'instruments_type_df' ergeben nicht 100%.")
             error_count += 1
-            function_result("Instruments-Import und -Verarbeitung", error_count, warning_count, logfile, screen=screen)
             return None, None, None
 
-        screen_and_log("Info: Instruments-Type-Daten erfolgreich importiert.", logfile, screen=screen)
+        logger.info("Instruments-Type-Daten erfolgreich importiert.")
 
         # Exportiere instruments_type_df als Excel-Datei
         if (settings or {}).get('Export', {}).get('instruments_type_to_excel', {}):
@@ -1246,19 +1260,24 @@ def instruments_import_and_process(settings, logfile, screen=True):
                 if (settings or {}).get("Export", {}).get("instruments_type_to_excel", {}).get("enabled", False):
                     export_df_to_excel(instruments_type_df, (settings or {}).get("Export", {}).get("instruments_type_to_excel", {}).get("filename", ""), logfile, screen=False)
             except Exception as e:
-                screen_and_log(f"WARNING: Fehler beim Exportieren der Instruments-Type-Daten: {e}", logfile, screen=screen)
+                logger.warning(f"Fehler beim Exportieren der Instruments-Type-Daten: {e}")
                 warning_count += 1
 
     except Exception as e:
-        screen_and_log(f"ERROR: Unerwarteter Fehler beim Import der Typen der Instrumente: {e}", logfile)
+        logger.error(f"Unerwarteter Fehler beim Import der Typen der Instrumente: {e}")
         error_count += 1
 
-    # Aufruf von function_result am Ende der Funktion
-    function_result("Instruments-Import und -Verarbeitung", error_count, warning_count, logfile, screen=screen)
+    # Ergebnis ausgeben
+    if error_count > 0:
+        logger.error("Instruments-Import und -Verarbeitung fehlgeschlagen.")
+    elif warning_count > 0:
+        logger.warning(f"Instruments-Import und -Verarbeitung abgeschlossen mit {warning_count} Warnung(en).")
+    else:
+        logger.info("Instruments-Import und -Verarbeitung erfolgreich abgeschlossen.")
     return instruments_df, instruments_region_df, instruments_type_df
 
 # Main Block 03: Kurse (prices) importieren, prüfen und updaten
-def prices_import_and_process(settings, instruments_df, logfile, screen=True):
+def prices_import_and_process(settings, instruments_df, logger):
     """
     Importiert und verarbeitet die Preise, indem die Price-Datei eingelesen wird, der Abgleich mit Instrumenten
     erfolgt und die Preise aktualisiert werden.
@@ -1280,25 +1299,24 @@ def prices_import_and_process(settings, instruments_df, logfile, screen=True):
     try:
         # 1. Prices-Datei (Kurse) importieren
         prices_file = (settings or {}).get('Files', {}).get('prices', '')
-        prices_df = import_parquet(prices_file, logfile, screen=screen)
+        prices_df = import_parquet(prices_file, str(logger.log_file), screen=logger.screen_output)
         if prices_df is None:
-            screen_and_log(f"ERROR: Fehler beim Einlesen der Kurse-Datei '{prices_file}'.", logfile)
+            logger.error(f"Fehler beim Einlesen der Kurse-Datei '{prices_file}'.")
             error_count += 1
-            function_result("Kursdaten-Import", error_count, warning_count, logfile, screen=screen)
             return None
 
         # 2. Abgleich von prices und instruments
-        prices_check_for_instruments(prices_df, instruments_df, logfile, screen=screen)
+        prices_check_for_instruments(prices_df, instruments_df, logger)
 
         # 3. Aktualisiere die Kurse in prices_df mit prices_update
-        prices_df = prices_update(prices_df, instruments_df, logfile, screen=screen)
+        prices_df = prices_update(prices_df, instruments_df, logger)
         
         # 4. Speichere den aktualisierten DataFrame in die Parquet-Datei
         try:
             prices_df.to_parquet((settings or {}).get('Files', {}).get('prices', ''))
-            screen_and_log(f"Info: Aktualisierte Prices-Daten erfolgreich in Parquet-Datei '{(settings or {}).get('Files', {}).get('prices', '')}' gespeichert.", logfile, screen=screen)
+            logger.info(f"Aktualisierte Prices-Daten erfolgreich in Parquet-Datei '{(settings or {}).get('Files', {}).get('prices', '')}' gespeichert.")
         except Exception as e:
-            screen_and_log(f"WARNING: Fehler beim Speichern der Prices-Parquet-Datei '{(settings or {}).get('Files', {}).get('prices', '')}': {e}", logfile, screen=screen)
+            logger.warning(f"Fehler beim Speichern der Prices-Parquet-Datei '{(settings or {}).get('Files', {}).get('prices', '')}': {e}")
             warning_count += 1
 
         # 5. Sicherstellen, dass alle (Datum, WKN)-Kombinationen vorhanden sind (ergänzt 26.3.25)
@@ -1321,10 +1339,10 @@ def prices_import_and_process(settings, instruments_df, logfile, screen=True):
             # Nur 'price' beibehalten, Index auffüllen
             prices_df = prices_df.reindex(full_index)
 
-            screen_and_log("Info: Fehlende (Datum, WKN)-Kombinationen im DataFrame ergänzt mit NaN (alle Kalendertage).", logfile, screen=screen)
+            logger.info("Fehlende (Datum, WKN)-Kombinationen im DataFrame ergänzt mit NaN (alle Kalendertage).")
 
         except Exception as e:
-            screen_and_log(f"WARNING: Fehler beim Ergänzen fehlender Datum-WKN-Kombinationen: {e}", logfile, screen=screen)
+            logger.warning(f"Fehler beim Ergänzen fehlender Datum-WKN-Kombinationen: {e}")
             warning_count += 1
 
     
@@ -1333,9 +1351,9 @@ def prices_import_and_process(settings, instruments_df, logfile, screen=True):
         try:
             prices_df = prices_df.sort_index(level='date')  # Sicherstellen, dass nach Datum sortiert
             prices_df['price'] = prices_df.groupby('wkn')['price'].ffill()
-            screen_and_log("Info: Fehlende Preis Werte erfolgreich mittels ffill pro WKN aufgefüllt.", logfile, screen=screen)
+            logger.info("Fehlende Preis Werte erfolgreich mittels ffill pro WKN aufgefüllt.")
         except Exception as e:
-            screen_and_log(f"WARNING: Fehler beim Auffüllen der Preise mit ffill: {e}", logfile, screen=screen)
+            logger.warning(f"Fehler beim Auffüllen der Preise mit ffill: {e}")
             warning_count += 1    
 
         # 7. Exportiere prices_df als Excel-Pivot-Datei, falls 'excel_pivot' in den Einstellungen vorhanden ist
@@ -1346,21 +1364,26 @@ def prices_import_and_process(settings, instruments_df, logfile, screen=True):
         #
         
         try:
-            export_2D_df_to_excel_format(prices_df, (settings or {}).get("Export", {}).get("prices_to_excel", {}), logfile, screen=False)
+            export_2D_df_to_excel_format(prices_df, (settings or {}).get("Export", {}).get("prices_to_excel", {}), logger)
         except Exception as e:
-            screen_and_log(f"WARNING: Fehler beim Exportieren der Excel-Pivot-Datei '{(settings or {}).get("Export", {}).get("prices_to_excel", {}).get("filename", "")}': {e}", logfile, screen=screen)
+            logger.warning(f"Fehler beim Exportieren der Excel-Pivot-Datei '{(settings or {}).get("Export", {}).get("prices_to_excel", {}).get("filename", "")}': {e}")
             warning_count += 1
 
     except Exception as e:
-        screen_and_log(f"ERROR: Unerwarteter Fehler beim Import der Kurs-Daten: {e}", logfile)
+        logger.error(f"Unerwarteter Fehler beim Import der Kurs-Daten: {e}")
         error_count += 1
 
-    # Aufruf von function_result am Ende der Funktion
-    function_result("Kursdaten-Import und -Verarbeitung", error_count, warning_count, logfile, screen=screen)
+    # Ergebnis ausgeben
+    if error_count > 0:
+        logger.error("Kursdaten-Import und -Verarbeitung fehlgeschlagen.")
+    elif warning_count > 0:
+        logger.warning(f"Kursdaten-Import und -Verarbeitung abgeschlossen mit {warning_count} Warnung(en).")
+    else:
+        logger.info("Kursdaten-Import und -Verarbeitung erfolgreich abgeschlossen.")
     return prices_df
 
 # Main Block 04: Buchungen (bookings) importieren
-def bookings_import_and_process(settings, instruments_df, logfile, screen=True):
+def bookings_import_and_process(settings, instruments_df, logger):
     """
     Importiert und verarbeitet die Buchungen, indem die Bookings-Datei eingelesen und mit den Instrumenten abgeglichen wird.
     Überprüft, ob alle WKNs in den Buchungen auch in den Instrumenten vorhanden sind.
@@ -1382,60 +1405,63 @@ def bookings_import_and_process(settings, instruments_df, logfile, screen=True):
     try:
         # 1 Bookings-Datei (Buchungen) importieren
         bookings_file = (settings or {}).get('Files', {}).get('bookings', '')
-        bookings_df = bookings_import(bookings_file)
+        bookings_df = bookings_import(bookings_file, logger)
         
         if bookings_df is None:
-            screen_and_log(f"ERROR: Fehler beim Import der Buchungs-Datei '{bookings_file}'.", logfile)
+            logger.error(f"Fehler beim Import der Buchungs-Datei '{bookings_file}'.")
             error_count += 1
-            function_result("Buchungen-Import und -Verarbeitung", error_count, warning_count, logfile, screen=screen)
             return None
 
         # 2 Prüfe bookings_df gegen instruments_df und breche ab, wenn WKNs fehlen
         missing_wkns = bookings_check_for_instruments(bookings_df, instruments_df)
         
         if missing_wkns:
-            screen_and_log(f"ERROR: Die folgenden WKNs aus 'bookings_df' fehlen in 'instruments_df': {missing_wkns}", logfile)
+            logger.error(f"Die folgenden WKNs aus 'bookings_df' fehlen in 'instruments_df': {missing_wkns}")
             error_count += 1
-            function_result("Buchungen-Import und -Verarbeitung", error_count, warning_count, logfile, screen=screen)
             return None
         else:
-            screen_and_log("Info: Alle WKNs aus 'bookings_df' sind in 'instruments_df' vorhanden.", logfile, screen=screen)
+            logger.info("Alle WKNs aus 'bookings_df' sind in 'instruments_df' vorhanden.")
 
     except Exception as e:
-        screen_and_log(f"ERROR: Unerwarteter Fehler beim Einlesen der Buchungen: {e}", logfile)
+        logger.error(f"Unerwarteter Fehler beim Einlesen der Buchungen: {e}")
         error_count += 1
 
-    # Aufruf von function_result am Ende der Funktion
-    function_result("Buchungen-Import und -Verarbeitung", error_count, warning_count, logfile, screen=screen)
+    # Ergebnis ausgeben
+    if error_count > 0:
+        logger.error("Buchungen-Import und -Verarbeitung fehlgeschlagen.")
+    elif warning_count > 0:
+        logger.warning(f"Buchungen-Import und -Verarbeitung abgeschlossen mit {warning_count} Warnung(en).")
+    else:
+        logger.info("Buchungen-Import und -Verarbeitung erfolgreich abgeschlossen.")
     return bookings_df
 
 
 
 # Main Block 09: Portofolio Wert nach Anlagetypen bzw Regionen
-def export_portfolio_analysis(values_day_df, instruments_type_df, instruments_region_df):
+def export_portfolio_analysis(values_day_df, instruments_type_df, instruments_region_df, logger):
 
     values_month_df = df_to_eom(values_day_df)
     
     # 9.1.
     values_type_month_df = values_type_month(values_month_df, instruments_type_df)
-    export_2D_df_to_excel_format(values_type_month_df, (settings or {}).get("Export", {}).get("values_type_month_to_excel", {}), logfile, screen=False)
+    export_2D_df_to_excel_format(values_type_month_df, (settings or {}).get("Export", {}).get("values_type_month_to_excel", {}), logger)
 
     # 9.2. Portfolio Zusammensetzung - prozentualer Anteil pro Anlagetyp
     values_type_month_percentage_df = df_transform_each_line_to_percentage(values_type_month_df)
-    export_2D_df_to_excel_format(values_type_month_percentage_df, (settings or {}).get("Export", {}).get("values_type_month_percentage_to_excel", {}), logfile, screen=False)
+    export_2D_df_to_excel_format(values_type_month_percentage_df, (settings or {}).get("Export", {}).get("values_type_month_percentage_to_excel", {}), logger)
 
     # 9.3. Portfolio Wert nach Regionen
-    values_region_month_df = values_region_month(values_month_df, instruments_region_df)
-    export_2D_df_to_excel_format(values_region_month_df, (settings or {}).get("Export", {}).get("values_region_month_to_excel", {}), logfile, screen=False)
+    values_region_month_df = values_region_month(values_month_df, instruments_region_df, logger)
+    export_2D_df_to_excel_format(values_region_month_df, (settings or {}).get("Export", {}).get("values_region_month_to_excel", {}), logger)
 
     # 9.4. Portfolio Zusammensetzung - prozentualer Anteil pro Region
     values_region_month_percentage_df = df_transform_each_line_to_percentage(values_region_month_df)
-    export_2D_df_to_excel_format(values_region_month_percentage_df, (settings or {}).get("Export", {}).get("values_region_month_percentage_to_excel", {}), logfile, screen=False)
+    export_2D_df_to_excel_format(values_region_month_percentage_df, (settings or {}).get("Export", {}).get("values_region_month_percentage_to_excel", {}), logger)
 
     # 9.5. nur Instrumente, die einen Regional Charakter haben 
     values_region_month_wo_exception_df = values_region_month_df.drop(index='exception', level='reg')
     values_region_month_wo_exception_percentage_df = df_transform_each_line_to_percentage(values_region_month_wo_exception_df)
-    export_2D_df_to_excel_format(values_region_month_wo_exception_percentage_df, (settings or {}).get("Export", {}).get("values_region_month_wo_exception_percentage_to_excel", {}), logfile, screen=False)
+    export_2D_df_to_excel_format(values_region_month_wo_exception_percentage_df, (settings or {}).get("Export", {}).get("values_region_month_wo_exception_percentage_to_excel", {}), logger)
 
     return
 
@@ -1444,7 +1470,7 @@ def export_portfolio_analysis(values_day_df, instruments_type_df, instruments_re
 
 
 # Holt die Werte für Cash Rückstellungen aus Provisions.xlsx
-def provisions_month_import_and_process(values_month_df, settings, logfile, screen=True):
+def provisions_month_import_and_process(values_month_df, settings, logger):
     """
     Verarbeitet den DataFrame 'provisions_month_df', indem die Datumswerte aus 'values_month_df' übernommen werden,
     basierend auf dem Abgleich von Monat und Jahr. Fehlende Datumswerte werden ergänzt und Lücken gefüllt.
@@ -1501,33 +1527,36 @@ def provisions_month_import_and_process(values_month_df, settings, logfile, scre
         if pd.isnull(provisions_month_df['provision'].iloc[-1]) or provisions_month_df['provision'].iloc[-1] == 0:
             provisions_month_df['provision'].iloc[-1] = provisions_month_df['provision'].iloc[-2]
 
-        screen_and_log("Info: Provisions Daten erfolgreich importiert und verarbeitet.", logfile, screen=screen)
+        logger.info("Provisions Daten erfolgreich importiert und verarbeitet.")
 
     except FileNotFoundError as e:
-        screen_and_log(f"ERROR: {e}", logfile)
+        logger.error(f"{e}")
         error_count += 1
         provisions_month_df = None
     except Exception as e:
-        screen_and_log(f"ERROR: Unerwarteter Fehler beim Import und Verarbeiten der Provisionsdaten: {e}", logfile)
+        logger.error(f"Unerwarteter Fehler beim Import und Verarbeiten der Provisionsdaten: {e}")
         error_count += 1
         provisions_month_df = None
 
-    # Aufruf von function_result am Ende der Funktion
-    function_result("Provisions-Import und -Verarbeitung", error_count, warning_count, logfile, screen=screen)
+    # Ergebnis ausgeben
+    if error_count > 0:
+        logger.error("Provisions-Import und -Verarbeitung fehlgeschlagen.")
+    elif warning_count > 0:
+        logger.warning(f"Provisions-Import und -Verarbeitung abgeschlossen mit {warning_count} Warnung(en).")
+    else:
+        logger.info("Provisions-Import und -Verarbeitung erfolgreich abgeschlossen.")
 
     return provisions_month_df
 
 # Erstellt angepaßten Values Dataframe, bei dem der Cash Anteil um die Provisions reduziert ist
-def values_month_adjust_for_provisions(values_month_df, provisions_month_df, logfile, screen=True):
+def values_month_adjust_for_provisions(values_month_df, provisions_month_df, logger):
     """
     Passt den DataFrame 'values_month_df' basierend auf den Provisionswerten in 'provisions_month_df' an.
 
     Parameter:
         values_month_df (DataFrame): DataFrame mit Monatsdaten.
         provisions_month_df (DataFrame): DataFrame mit Provisionsdaten.
-        logfile (str): Name des Logfiles.
-        screen (bool): Ob Ausgaben auf dem Bildschirm erfolgen sollen.
-        log (bool): Ob Ausgaben ins Logfile geschrieben werden sollen.
+        logger (ExtendedLogger): Logger instance for output and logging.
 
     Rückgabe:
         DataFrame: Ein angepasster DataFrame, in dem die Werte für WKN 'cash' basierend auf den Provisionswerten angepasst wurden.
@@ -1550,15 +1579,15 @@ def values_month_adjust_for_provisions(values_month_df, provisions_month_df, log
                     values_adjusted_df.loc[(date, 'cash'), 'value'] -= provision_value
                 else:
                     # Gebe eine WARNING aus und setze den Cash-Wert auf 0
-                    warning_message = (f"WARNING: Der Cash-Wert am {date} ist kleiner oder gleich der Provision. "
+                    warning_message = (f"Der Cash-Wert am {date} ist kleiner oder gleich der Provision. "
                                        f"Der Wert wurde auf 0 gesetzt.")
-                    screen_and_log(warning_message, logfile, screen=screen)
+                    logger.warning(warning_message)
                     values_adjusted_df.loc[(date, 'cash'), 'value'] = 0
 
     return values_adjusted_df
 
 # Erstellt angepaßten Values nach Anlagetyp Dataframe, bei dem der Cash Anteil um die Provisions reduziert ist
-def values_type_month_after_provisions(values_type_month_df, provisions_month_df, logfile, screen=True):
+def values_type_month_after_provisions(values_type_month_df, provisions_month_df, logger):
     """
     Passt die Werte im DataFrame `values_type_month_df` an, indem der Wert für `cash`
     um die entsprechenden Werte in `provisions_month_df` reduziert wird.
@@ -1597,7 +1626,7 @@ def values_type_month_after_provisions(values_type_month_df, provisions_month_df
                     adjusted_df.loc[(date, 'cash'), 'type_value'] = 0
                 
                     warning_message = (f"WARNING: Der Wert von 'cash' am {date} wurde auf 0 gesetzt, da er kleiner als die Provision war.")
-                    screen_and_log(warning_message, logfile, screen)
+                    logger.warning(warning_message)
 
         # Benenne die Spalte 'cash' in 'cash_invest' um
         adjusted_df = adjusted_df.rename(index={'cash': 'cash_invest'})
@@ -1607,11 +1636,11 @@ def values_type_month_after_provisions(values_type_month_df, provisions_month_df
 
     except Exception as e:
         error_message = f"ERROR: Ein Fehler ist in 'values_type_month_after_provisions' aufgetreten: {e}"
-        screen_and_log(error_message, logfile, screen)
+        logger.error(error_message)
         return None
 
 # Holt die Werte für die Zielstruktur des Portfolios aus Bookings.xlsx
-def target_shares_import_and_process(instruments_filename, logfile, screen=True):
+def target_shares_import_and_process(instruments_filename, logger):
     """
     Importiert das Excel-File und liest die Spalten "wkn" und "Ziel" ein.
     Überprüft, ob die Summe von "target_share" 100% beträgt.
@@ -1642,31 +1671,32 @@ def target_shares_import_and_process(instruments_filename, logfile, screen=True)
         total_target_share = round(df['target_share'].sum(), 1)
         if total_target_share == 1:
             target_df = df
-            screen_and_log("Info: Target-Daten erfolgreich importiert und überprüft.", logfile, screen=screen)
+            logger.info("Target-Daten erfolgreich importiert und überprüft.")
         else:
-            screen_and_log(
-                f"WARNING: Die Summe der 'target_share' beträgt {total_target_share*100}% und ist nicht 100%.", 
-                logfile, 
-                screen=screen
-            )
+            logger.warning(f"Die Summe der 'target_share' beträgt {total_target_share*100}% und ist nicht 100%.")
             warning_count += 1
 
     except FileNotFoundError as e:
-        screen_and_log(f"ERROR: Datei '{instruments_filename}' nicht gefunden: {e}", logfile)
+        logger.error(f"Datei '{instruments_filename}' nicht gefunden: {e}")
         error_count += 1
     except Exception as e:
-        screen_and_log(f"ERROR: Unerwarteter Fehler beim Import der Target-Daten: {e}", logfile)
+        logger.error(f"Unerwarteter Fehler beim Import der Target-Daten: {e}")
         error_count += 1
 
-    # Aufruf von function_result zur Ausgabe von Fehler- und Warnmeldungen
-    function_result("Import der Target-Daten", error_count, warning_count, logfile, screen=screen)
+    # Ergebnis ausgeben
+    if error_count > 0:
+        logger.error("Import der Target-Daten fehlgeschlagen.")
+    elif warning_count > 0:
+        logger.warning(f"Import der Target-Daten abgeschlossen mit {warning_count} Warnung(en).")
+    else:
+        logger.info("Import der Target-Daten erfolgreich abgeschlossen.")
 
     if warning_count > 0:
         target_df=None
 
     return target_df
 
-def values_vs_target(values_month_df, target_shares_df, prices_df, logfile, screen=True):
+def values_vs_target(values_month_df, target_shares_df, prices_df, logger):
     """
     Vergleicht die aktuellen Kontostände mit den Zielanteilen und berechnet die Abweichungen.
 
@@ -1722,29 +1752,33 @@ def values_vs_target(values_month_df, target_shares_df, prices_df, logfile, scre
         if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(buy_sell_df, "buy_sell_debug.xlsx", logfile, screen=False)
         
         # Ergebnis-Log und Rückgabe
-        screen_and_log("Info: Abweichungen von Zielporfolio erfolgreich berechnet.", logfile, screen=screen)
+        logger.info("Abweichungen von Zielporfolio erfolgreich berechnet.")
     
     except Exception as e:
-        screen_and_log(f"ERROR: Unerwarteter Fehler bei der Berechnung der Abweichungen: {e}", logfile)
+        logger.error(f"Unerwarteter Fehler bei der Berechnung der Abweichungen: {e}")
         error_count += 1
         buy_sell_df = pd.DataFrame()  # Leerer DataFrame als Fallback
 
-    # Aufruf von function_result am Ende der Funktion
-    function_result("Kontostände vs. Zielberechnung", error_count, warning_count, logfile, screen=screen)
+    # Ergebnis ausgeben
+    if error_count > 0:
+        logger.error("Kontostände vs. Zielberechnung fehlgeschlagen.")
+    elif warning_count > 0:
+        logger.warning(f"Kontostände vs. Zielberechnung abgeschlossen mit {warning_count} Warnung(en).")
+    else:
+        logger.info("Kontostände vs. Zielberechnung erfolgreich abgeschlossen.")
 
     return buy_sell_df
 
-def overview(values_df, unrealized_gains_losses_df, invest_df, logfile, screen=True):
+def overview(values_df, unrealized_gains_losses_df, invest_df, logger):
     """
-    Erstellt eine Übersicht über die Summen pro Datumseintrag der "non_cash_instruments" und "cash_instruments", 
+    Erstellt eine Übersicht über die Summen pro Datumseintrag der "non_cash_instruments" und "cash_instruments",
     sowie (ohne Berechnung) den Gewinn/Verlust und Investitionswerte.
 
     Parameter:
         values_df (DataFrame): DataFrame mit Kontoständen (pro periode) (MultiIndex: date, wkn).
         unrealized_gains_losses_df (DataFrame): DataFrame mit Gewinn-Verlust-Werten (pro periode) (MultiIndex: date, wkn).
         invest_df (DataFrame): DataFrame mit täglichen Investitionswerten (pro periode) (Index: date).
-        logfile (str): Name des Logfiles.
-        screen (bool): Ob Ausgaben auf dem Bildschirm erfolgen sollen.
+        logger (ExtendedLogger): Logger instance for output and logging.
 
     Rückgabe:
         DataFrame: Ein DataFrame mit Index Datum mit den Spalten 'non_cash_instruments', 'cash_instruments', 'unrealized_gains_losses', 'invest'.
@@ -1775,15 +1809,15 @@ def overview(values_df, unrealized_gains_losses_df, invest_df, logfile, screen=T
         overview_df.fillna(0, inplace=True)
 
         # Log-Erfolgsmeldung
-        screen_and_log("Info: Übersicht erfolgreich erstellt.", logfile, screen=screen)
+        logger.info("Info: Übersicht erfolgreich erstellt.")
 
         return overview_df
 
     except Exception as e:
-        screen_and_log(f"ERROR: Fehler bei der Erstellung der Übersicht: {e}", logfile)
+        logger.error(f"Fehler bei der Erstellung der Übersicht: {e}")
         return pd.DataFrame()
 
-def export_bank_analysis_to_excel(df_shares, df_values, filename, logfile, screen=True):
+def export_bank_analysis_to_excel(df_shares, df_values, filename, logger):
     """
     Erstellt eine Excel-Datei mit Analysen pro Bank. Für jede Bank wird eine eigene Matrix erstellt,
     wobei die Zeilen das Datum und die Spalten WKN-bezogene Daten (Shares und Values) sind.
@@ -1797,9 +1831,7 @@ def export_bank_analysis_to_excel(df_shares, df_values, filename, logfile, scree
         df_shares (DataFrame): DataFrame mit MultiIndex (date, bank, wkn) und einer Spalte für die Anteile (share).
         df_values (DataFrame): DataFrame mit MultiIndex (date, bank, wkn) und einer Spalte für die Werte (value).
         filename (str): Name der Excel-Datei, die erzeugt werden soll.
-        logfile (str): Name des Logfiles.
-        screen (bool): Wenn True, werden Meldungen auf dem Bildschirm ausgegeben.
-        log (bool): Wenn True, werden Meldungen ins Logfile geschrieben.
+        logger (ExtendedLogger): Logger instance for output and logging.
     """
     try:
         # Initialisiere die Excel-Arbeitsmappe
@@ -1841,7 +1873,7 @@ def export_bank_analysis_to_excel(df_shares, df_values, filename, logfile, scree
 
             # Überspringe Banken ohne verbleibende Daten
             if combined.empty:
-                screen_and_log(f"Info: Keine Daten vorhanden für Bank '{bank}'. Überspringe Export.", logfile, screen=screen)
+                logger.info(f"Keine Daten vorhanden für Bank '{bank}'. Überspringe Export.")
                 continue
 
             # Umsortieren der Spalten: wkn1-share, wkn1-value, wkn2-share, wkn2-value
@@ -1861,23 +1893,21 @@ def export_bank_analysis_to_excel(df_shares, df_values, filename, logfile, scree
         # Speichere die Excel-Datei, wenn mindestens ein Arbeitsblatt erstellt wurde
         if len(workbook.sheetnames) > 0:
             workbook.save(filename)
-            screen_and_log(f"Info: Datei '{filename}' erfolgreich erstellt.", logfile, screen=screen)
+            logger.info(f"Datei '{filename}' erfolgreich erstellt.")
         else:
-            screen_and_log(f"Info: Keine Daten vorhanden für irgendeine Bank. Datei '{filename}' wurde nicht erstellt.", logfile, screen=screen)
+            logger.info(f"Keine Daten vorhanden für irgendeine Bank. Datei '{filename}' wurde nicht erstellt.")
 
     except Exception as e:
-        error_message = f"ERROR: Fehler beim Erstellen der Excel-Datei '{filename}': {e}"
-        screen_and_log(error_message, logfile, screen)
+        logger.error(f"Fehler beim Erstellen der Excel-Datei '{filename}': {e}")
 
 # Erstellt Übersicht Non-Cash und Cash pro Bank für den Export in das Finance File
-def depots_fuer_finance(values_month_banks_df, logfile, screen=True):
+def depots_fuer_finance(values_month_banks_df, logger):
     """
     Erstellt eine Auswertung der Cash-Werte und Nicht-Cash-Werte pro Bank auf Basis von values_month_banks_df.
 
     Parameter:
         values_month_banks_df (DataFrame): MultiIndex (date, bank, wkn) mit Spalte 'value'.
-        logfile (str): Pfad zum Logfile.
-        screen (bool): Steuerung der Bildschirmausgabe.
+        logger (ExtendedLogger): Logger instance for output and logging.
 
     Rückgabe:
         DataFrame: Index = Datum, Spalten = Bank_cash, Bank_non_cash
@@ -1903,14 +1933,14 @@ def depots_fuer_finance(values_month_banks_df, logfile, screen=True):
         result_df = pd.concat([df_cash_grouped, df_non_cash_grouped], axis=1)
         result_df = result_df.sort_index(axis=1)
 
-        screen_and_log("Info: depots_fuer_finance erfolgreich erstellt.", logfile, screen)
+        logger.info("depots_fuer_finance erfolgreich erstellt.")
         return result_df
 
     except Exception as e:
-        screen_and_log(f"ERROR: Fehler in depots_fuer_finance: {e}", logfile, screen)
+        logger.error(f"Fehler in depots_fuer_finance: {e}")
         return None
 
-def export_overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df, logfile, screen):
+def export_overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df, logger):
     """ Overview (Bericht)
         erstellt die overviews und exportiert diese
         keine rückgabe daten
@@ -1921,15 +1951,15 @@ def export_overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df
     format_numbers=["DD.MM.YY","#,##0 €","#,##0 €","#,##0 €;[Red]-#,##0 €","#,##0 €;[Red]-#,##0 €"]
     format_columns=[9, 12, 10, 10, 10]
 
-    overview_day_df = overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df, logfile, screen=screen)
+    overview_day_df = overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df, logger)
     if (settings or {}).get("Export", {}).get("overview_day_to_excel", {}).get("enabled", False):
-        export_df_to_excel(overview_day_df, (settings or {}).get("Export", {}).get("overview_day_to_excel", {}).get("filename", ""), logfile, screen=False)
+        export_df_to_excel(overview_day_df, (settings or {}).get("Export", {}).get("overview_day_to_excel", {}).get("filename", ""), str(logger.log_file), screen=logger.screen_output)
 
     values_month_df = df_to_eom(values_day_df)
     unrealized_gains_losses_month_df = df_2D_sum_per_period(unrealized_gains_losses_day_df, 'month')
     invest_month_df = df_1D_sum_per_period(invest_day_df, 'month')
 
-    overview_month_df = overview(values_month_df, unrealized_gains_losses_month_df, invest_month_df, logfile, screen=screen)
+    overview_month_df = overview(values_month_df, unrealized_gains_losses_month_df, invest_month_df, logger)
     if (settings or {}).get("Export", {}).get("overview_month_to_excel", {}).get("enabled", False):
         export_df_to_excel(overview_month_df, (settings or {}).get("Export", {}).get("overview_month_to_excel", {}).get("filename", ""), logfile, screen=False)
     if (settings or {}).get("Export", {}).get("overview_month_to_excel", {}).get("enabled", False):
@@ -1941,7 +1971,7 @@ def export_overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df
     unrealized_gains_losses_year_df = df_2D_sum_per_period(unrealized_gains_losses_day_df, 'year')
     invest_year_df = df_1D_sum_per_period(invest_day_df, 'year')
 
-    overview_year_df = overview(values_year_df, unrealized_gains_losses_year_df, invest_year_df, logfile, screen=screen)
+    overview_year_df = overview(values_year_df, unrealized_gains_losses_year_df, invest_year_df, logger)
     if (settings or {}).get("Export", {}).get("overview_year_to_excel", {}).get("enabled", False):
         export_df_to_excel(overview_year_df, (settings or {}).get("Export", {}).get("overview_year_to_excel", {}).get("filename", ""), logfile, screen=False)
     if (settings or {}).get("Export", {}).get("overview_year_to_excel", {}).get("enabled", False):
@@ -1956,26 +1986,28 @@ def export_overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df
 
 # Hauptprogramm
 if __name__ == "__main__":
-    # 1. Initialisierung 
+    # 1. Initialisierung
     settings = initializing('depot.ini', screen=False)
     logfile=(settings or {}).get('Files', {}).get('logfile', '')
     screen=(settings or {}).get('Output', {}).get('screen', False)
-    
-    screen_and_log("START: Programm wird gestartet")
+
+    # Initialize ahlib logger
+    logger = create_extended_logger(logfile, screen, script_name='depot')
+    logger.info("START: Programm wird gestartet")
 
     # 2. Instruments
-    instruments_df, instruments_region_df, instruments_type_df = instruments_import_and_process(settings, logfile, screen=screen)
+    instruments_df, instruments_region_df, instruments_type_df = instruments_import_and_process(settings, logger)
 
     # 3. Prices-Datei (Kurse) importieren, verarbeiten und überwachen
-    prices_df = prices_import_and_process(settings, instruments_df, logfile, screen=screen)
+    prices_df = prices_import_and_process(settings, instruments_df, logger)
     end_date = prices_df.index.get_level_values('date').max()
     start_date = prices_df.index.get_level_values('date').min()
 
     # 4. Bookings-Datei (Buchungen)
-    bookings_df = bookings_import_and_process(settings, instruments_df, logfile, screen=screen)
+    bookings_df = bookings_import_and_process(settings, instruments_df, logger)
 
     # 5. Shares (Bestand) auf Tagesbasis pro wkn und Bank aus bookings_df (Buchungen) aufgebaut
-    shares_day_banks_df = shares_from_bookings(bookings_df, end_date, logfile, screen=screen)
+    shares_day_banks_df = shares_from_bookings(bookings_df, end_date, logger)
     
 
     # 6. Values (Depot-/Kontostände in Euro, Stück*Preis = Wert)
@@ -1983,23 +2015,23 @@ if __name__ == "__main__":
 
     # 6.1. Values (Kontostände in Euro) aus Positions (Bestände in Stück) und prices_df (Kurse) aufgebaut
     values_day_banks_df = values_from_shares_and_prices(shares_day_banks_df, prices_df)
-    screen_and_log('Info: Werte (values) erfolgreich aufgebaut', logfile, screen=False)
+    logger.info('Werte (values) erfolgreich aufgebaut')
 
     # 6.2. Reduziere values_day_banks_df auf die Monatsebene
     values_month_banks_df = df_to_eom(values_day_banks_df)
-    screen_and_log('Info: Werte (values) daily erfolgreich auf Monatsebene reduziert', logfile, screen=False)
+    logger.info('Werte (values) daily erfolgreich auf Monatsebene reduziert')
     if (settings or {}).get("Export", {}).get("values_month_banks_to_excel", {}).get("enabled", False):
         export_df_to_excel(values_month_banks_df, (settings or {}).get("Export", {}).get("values_month_banks_to_excel", {}).get("filename", ""), logfile, screen=False)
 
     # 6.3. Aggregiere die Werte in values_month_banks_df über alle Banken
     values_month_df = aggregate_banks(values_month_banks_df)
-    screen_and_log('Info: Werte (values) auf Monatsebene über Banken erfolgreich aggregiert', logfile, screen=screen)
-    export_2D_df_to_excel_format(values_month_df, (settings or {}).get("Export", {}).get("values_month_to_excel", {}), logfile, screen=False)
+    logger.info('Werte (values) auf Monatsebene über Banken erfolgreich aggregiert')
+    export_2D_df_to_excel_format(values_month_df, (settings or {}).get("Export", {}).get("values_month_to_excel", {}), logger)
 
     # 6.4. Aggregiere die Werte in values_day_banks_df über alle Banken
     values_day_df = aggregate_banks(values_day_banks_df)
-    screen_and_log('Info: Werte (values) auf Tagesebene über Banken erfolgreich aggregiert', logfile, screen=False)
-    export_2D_df_to_excel_format(values_day_df, (settings or {}).get("Export", {}).get("values_day_to_excel", {}), logfile, screen=False)
+    logger.info('Werte (values) auf Tagesebene über Banken erfolgreich aggregiert')
+    export_2D_df_to_excel_format(values_day_df, (settings or {}).get("Export", {}).get("values_day_to_excel", {}), logger)
     
     # 6.5. Reduziere values_day_banks_df auf die Jahresebene (Ende jedes Jahres oder letztes verfügbares Datum)
     #values_year_banks_df = df_to_eoy(values_day_banks_df)
@@ -2017,22 +2049,22 @@ if __name__ == "__main__":
 
     # 7.1. Bestimme Buch-Gewinne und Verluste auf Tagesbasis (Anzahl des jeweiligen Instrumemts * Kurs-Differenz) vergleichbar Laspeyers 
     shares_day_df = aggregate_banks(shares_day_banks_df)
-    export_2D_df_to_excel_format(shares_day_df, (settings or {}).get("Export", {}).get("shares_day_to_excel", {}), logfile, screen=False)
+    export_2D_df_to_excel_format(shares_day_df, (settings or {}).get("Export", {}).get("shares_day_to_excel", {}), logger)
 
     unrealized_gains_losses_day_df = unrealized_gains_losses_day(shares_day_df, prices_df)
-    export_2D_df_to_excel_format(unrealized_gains_losses_day_df, (settings or {}).get("Export", {}).get("unrealized_gains_losses_day_to_excel", {}), logfile, screen=False)
+    export_2D_df_to_excel_format(unrealized_gains_losses_day_df, (settings or {}).get("Export", {}).get("unrealized_gains_losses_day_to_excel", {}), logger)
     
 
     # 7.2. Taxes and Fees aus bookings.xlsx holen
     bookings_filename = (settings or {}).get('Files', {}).get('bookings', '')
 
-    fees_bank_df=fees_import(bookings_filename)
+    fees_bank_df=fees_import(bookings_filename, logger)
     if (settings or {}).get("Export", {}).get("fees_bank_to_excel", {}).get("enabled", False):
-        export_df_to_excel(fees_bank_df, (settings or {}).get("Export", {}).get("fees_bank_to_excel", {}).get("filename", ""), logfile, screen=False)
+        export_df_to_excel(fees_bank_df, (settings or {}).get("Export", {}).get("fees_bank_to_excel", {}).get("filename", ""), str(logger.log_file), screen=logger.screen_output)
     fees_df=aggregate_banks(fees_bank_df)
-    export_2D_df_to_excel_format(fees_df, (settings or {}).get("Export", {}).get("fees_to_excel", {}), logfile, screen=False)
+    export_2D_df_to_excel_format(fees_df, (settings or {}).get("Export", {}).get("fees_to_excel", {}), logger)
         
-    taxes_bank_df=taxes_import(bookings_filename)
+    taxes_bank_df=taxes_import(bookings_filename, logger)
     if (settings or {}).get("Export", {}).get("taxes_bank_to_excel", {}).get("enabled", False):
         export_df_to_excel(taxes_bank_df, (settings or {}).get("Export", {}).get("taxes_bank_to_excel", {}).get("filename", ""), logfile, screen=False)
     taxes_df=aggregate_banks(taxes_bank_df)
@@ -2040,65 +2072,65 @@ if __name__ == "__main__":
    
     # 7.3. Interests and Dividends aus bookings.xlsx holen
     bookings_filename = (settings or {}).get('Files', {}).get('bookings', '')
-    interest_dividends_bank_df=interest_dividends_import(bookings_filename)
+    interest_dividends_bank_df=interest_dividends_import(bookings_filename, logger)
     if (settings or {}).get("Export", {}).get("interest_dividends_bank_to_excel", {}).get("enabled", False):
         export_df_to_excel(interest_dividends_bank_df, (settings or {}).get("Export", {}).get("interest_dividends_bank_to_excel", {}).get("filename", ""), logfile, screen=False)
     interest_dividends_df=aggregate_banks(interest_dividends_bank_df)
 
     # 7.3. Transaction_value_at_price (Käufe und Verkäufe zum Kurswert)
     bookings_filename = (settings or {}).get('Files', {}).get('bookings', '')
-    transaction_value_at_price_bank_day_df=transaction_value_at_price_import(bookings_filename)
+    transaction_value_at_price_bank_day_df=transaction_value_at_price_import(bookings_filename, logger)
     transaction_value_at_price_day_df=aggregate_banks(transaction_value_at_price_bank_day_df)
-    export_2D_df_to_excel_format(transaction_value_at_price_day_df, (settings or {}).get("Export", {}).get("transaction_value_at_price_day_to_excel", {}), logfile, screen=False)
+    export_2D_df_to_excel_format(transaction_value_at_price_day_df, (settings or {}).get("Export", {}).get("transaction_value_at_price_day_to_excel", {}), logger)
 
     # 7.4. Realized Gains and Loses - Summe aus Gebühren, Steuern und Zinsen / Dividenden die einer WKN zugeordnet sind
     # Der Dataframe ist tageweise aufgebaut, enthält nur Daten an denen ein relevante Buchung auftritt
     # Dataframe hat Multiindex (Datum, WKN) und eine Wertspalte
     realized_gains_losses_day_df = realized_gains_losses_day(fees_df, taxes_df, interest_dividends_df)
-    export_2D_df_to_excel_format(realized_gains_losses_day_df, (settings or {}).get("Export", {}).get("realized_gains_losses_day_to_excel", {}), logfile, screen=False)
+    export_2D_df_to_excel_format(realized_gains_losses_day_df, (settings or {}).get("Export", {}).get("realized_gains_losses_day_to_excel", {}), logger)
 
     # 7.5. Berechnet Buchgewinne pro Tag aus den Tageswerten und den Transaktionswerten ohne Gebühren und Steuern (Stück Kauf/Verkauf * Kurs)
     gains_losses_before_fees_taxes_day_df = gains_losses_before_fees_taxes_day(values_day_df, transaction_value_at_price_day_df)
-    export_2D_df_to_excel_format(gains_losses_before_fees_taxes_day_df, (settings or {}).get("Export", {}).get("gains_losses_before_fees_taxes_day_to_excel", {}), logfile, screen=False)
+    export_2D_df_to_excel_format(gains_losses_before_fees_taxes_day_df, (settings or {}).get("Export", {}).get("gains_losses_before_fees_taxes_day_to_excel", {}), logger)
 
     # 7.6. Buchgewinne und mit Gebühren, Steuern, Zinsen/Dividenden zusammenführen
     # gains_losses_after_fees_taxes_day_df
 
     # 7.7. Berechne tägliche Profitabilität pro WKN und Tag
     #yield_excl_div_day_df = yield_day_from_values_day(unrealized_gains_losses_day_df, values_day_df)
-    yield_excl_div_day_df = yield_day_from_values_day(gains_losses_before_fees_taxes_day_df, values_day_df)
+    yield_excl_div_day_df = yield_day_from_values_day(gains_losses_before_fees_taxes_day_df, values_day_df, logger)
     if yield_excl_div_day_df is not None:
-        export_2D_df_to_excel_format(yield_excl_div_day_df, (settings or {}).get("Export", {}).get("yield_excl_div_day_to_excel", {}), logfile, screen=False)
+        export_2D_df_to_excel_format(yield_excl_div_day_df, (settings or {}).get("Export", {}).get("yield_excl_div_day_to_excel", {}), logger)
     else:
-        screen_and_log("Warning: Tägliche Profitabilität (Yield) konnte nicht erstellt werden.", logfile, screen=True)
+        logger.warning("Tägliche Profitabilität (Yield) konnte nicht erstellt werden.")
 
     # 7.8. Profitabilität YTD (kumulierte Profitabilität) über (Reihe (1+Tagesprofitabilität))-1
-    yield_excl_div_year_df = yield_year_from_values_day(yield_excl_div_day_df, values_day_df)
+    yield_excl_div_year_df = yield_year_from_values_day(yield_excl_div_day_df, values_day_df, logger)
     if yield_excl_div_year_df is not None:
-        export_2D_df_to_excel_format(yield_excl_div_year_df, (settings or {}).get("Export", {}).get("yield_excl_div_year_to_excel", {}), logfile, screen=False)
-        screen_and_log("Info: Kumulative jährliche Rendite erfolgreich berechnet und exportiert.", logfile, screen=screen)
+        export_2D_df_to_excel_format(yield_excl_div_year_df, (settings or {}).get("Export", {}).get("yield_excl_div_year_to_excel", {}), logger)
+        logger.info("Kumulative jährliche Rendite erfolgreich berechnet und exportiert.")
     else:
-        screen_and_log("Warning: Kumulative jährliche Rendite (Yield) konnte nicht erstellt werden.", logfile, screen=True)
+        logger.warning("Kumulative jährliche Rendite (Yield) konnte nicht erstellt werden.")
 
 
     # 8. invest (Einschuss/Entnahme)
     bookings_filename = (settings or {}).get('Files', {}).get('bookings', '')
-    invest_day_df = invest_day(bookings_filename, start_date, end_date)
+    invest_day_df = invest_day(bookings_filename, start_date, end_date, logger)
     if invest_day_df is not None:
-        screen_and_log("Info: Investitions-Daten auf Tagesbasis erfolgreich erstellt.", logfile, screen=screen)
+        logger.info("Investitions-Daten auf Tagesbasis erfolgreich erstellt.")
     else:
-        screen_and_log("ERROR: Fehler beim Erstellen der Investitions-Daten auf Tagesbasis.",logfile, screen=screen)    
+        logger.error("Fehler beim Erstellen der Investitions-Daten auf Tagesbasis.")    
     
 
     # 9. Exportiert die Wert Aufteilung des Portfolios als absolute Werte und prozentuale Aufteilung 
-    export_portfolio_analysis(values_day_df, instruments_type_df, instruments_region_df)
+    export_portfolio_analysis(values_day_df, instruments_type_df, instruments_region_df, logger)
 
     # 10. Abweichung von Zielportfolio (nach Einzel Instrumenten) und Rebalancing Vorschlag
     # Benötigte Daten: values_month_df, instruments_type_df
     # Benötigte externe Datei: provisions.xlsx, instruments.xlsx
 
     # 10.1. Lese die Rückstellungen (provisions)
-    provisions_month_df = provisions_month_import_and_process(values_month_df, settings, logfile, screen=screen)
+    provisions_month_df = provisions_month_import_and_process(values_month_df, settings, logger)
     if provisions_month_df is None:
         sys.exit(1)  # Programm beenden, wenn die Provisionsdaten nicht erfolgreich verarbeitet wurden
     if (settings or {}).get('Export', {}).get('provisions_month_to_excel', {}):
@@ -2117,31 +2149,31 @@ if __name__ == "__main__":
     #export_2D_df_to_excel_format(values_month_after_provisions_df, settings["Export"]["values_month_after_provisions_to_excel"], logfile, screen=False)
 
     # 10.3. Lese Zusammensetzung Zielportfolio
-    target_shares_df=target_shares_import_and_process((settings or {}).get('Files', {}).get('instruments', ''), logfile, screen=screen)
+    target_shares_df=target_shares_import_and_process((settings or {}).get('Files', {}).get('instruments', ''), logger)
     if target_shares_df is not None:
-        screen_and_log("Info: Zielportfolio eingelesen und geprüft", logfile, screen=screen)
+        logger.info("Zielportfolio eingelesen und geprüft")
 
         # 10.4. Abweichung ermitteln auf Accountbasis
     
     
         # 10.5. Rebalancing Vorschlag
-        buy_sell_df=values_vs_target(values_month_df, target_shares_df, prices_df, logfile, screen=screen)
+        buy_sell_df=values_vs_target(values_month_df, target_shares_df, prices_df, logger)
         if (settings or {}).get("Export", {}).get("buy_sell_to_excel", {}).get("enabled", False):
             export_df_to_excel(buy_sell_df, (settings or {}).get("Export", {}).get("buy_sell_to_excel", {}).get("filename", ""), logfile, screen=False)
 
 
     else:
-        screen_and_log("WARNING: Zielportfolio eingelesen, aber Summe ergibt nicht 100%. Keine weitere Bearbeitung", logfile, screen=screen)
+        logger.warning("Zielportfolio eingelesen, aber Summe ergibt nicht 100%. Keine weitere Bearbeitung")
 
 
     # 10.4. Portfolio Zusammensetzung nach Korrektur des Cash Wertes um Rückstellungen (Provisions)
     values_type_month_df = values_type_month(values_month_df, instruments_type_df)
     
-    values_type_month_after_provisions_df = values_type_month_after_provisions(values_type_month_df, provisions_month_df, logfile, screen=screen)
-    export_2D_df_to_excel_format(values_type_month_after_provisions_df, (settings or {}).get("Export", {}).get("values_type_month_after_provisions_to_excel", {}), logfile, screen=False)
+    values_type_month_after_provisions_df = values_type_month_after_provisions(values_type_month_df, provisions_month_df, logger)
+    export_2D_df_to_excel_format(values_type_month_after_provisions_df, (settings or {}).get("Export", {}).get("values_type_month_after_provisions_to_excel", {}), logger)
 
     values_type_month_after_provisions_percentage_df = df_transform_each_line_to_percentage(values_type_month_after_provisions_df)
-    export_2D_df_to_excel_format(values_type_month_after_provisions_percentage_df, (settings or {}).get("Export", {}).get("values_type_month_after_provisions_percentage_to_excel", {}), logfile, screen=False)
+    export_2D_df_to_excel_format(values_type_month_after_provisions_percentage_df, (settings or {}).get("Export", {}).get("values_type_month_after_provisions_percentage_to_excel", {}), logger)
 
     # 11. Instrument Profitabilität
     # 11.1. Zinsen und Dividenden aus Bookings ermitteln 
@@ -2161,17 +2193,17 @@ if __name__ == "__main__":
 
 
     # 19. Overview (Bericht)
-    export_overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df, logfile, screen=screen)
+    export_overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df, logger)
 
 
     # 20. Depotauszug pro Bank (in einem File) um Wert und Anzahl bzw. Cash mit Konto-/Depot-Auszug zu vergleichen
     shares_month_banks_df = df_to_eom(shares_day_banks_df)
     if (settings or {}).get("Export", {}).get("depotauszug_to_excel", {}).get("enabled", False):
-        export_bank_analysis_to_excel(shares_month_banks_df, values_month_banks_df, (settings or {}).get("Export", {}).get("depotauszug_to_excel", {}).get("filename", ""), logfile, screen=False)
+        export_bank_analysis_to_excel(shares_month_banks_df, values_month_banks_df, (settings or {}).get("Export", {}).get("depotauszug_to_excel", {}).get("filename", ""), logger)
 
     # 21. Depots für Finance analysieren und für Import bereitstellen
 
-    depots_fuer_finance_df = depots_fuer_finance(values_month_banks_df, logfile, screen=screen)
+    depots_fuer_finance_df = depots_fuer_finance(values_month_banks_df, logger)
     if depots_fuer_finance_df is not None:
         if (settings or {}).get("Export", {}).get("depots_fuer_finance_to_excel", {}).get("enabled", False):
             export_df_to_excel(depots_fuer_finance_df, (settings or {}).get("Export", {}).get("depots_fuer_finance_to_excel", {}).get("filename", ""), logfile, screen=False)
