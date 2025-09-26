@@ -4,4 +4,6 @@ numpy
 openpyxl
 holidays
 pyarrow
-ahlib
+
+# Custom library - install from GitHub
+git+https://github.com/Drahmue/ahlib.git

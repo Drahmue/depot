@@ -285,9 +285,9 @@ def export_2D_df_to_excel_format(df, export, logger):
     format_columns = export.get("column_widths", {})
 
     if enabled:
-        export_2D_df_to_excel_clean_table(df, filename, str(logger.log_file), screen=logger.screen_output)
-        format_excel_as_table_with_freeze(filename, table_name="Table1", style_name="TableStyleMedium1", freeze_first_row=True, logfile=str(logger.log_file), screen=logger.screen_output)
-        format_excel_columns(filename,format_numbers, format_columns, str(logger.log_file), screen=logger.screen_output)
+        export_2D_df_to_excel_clean_table(df, filename, logger)
+        format_excel_as_table_with_freeze(filename, logger, table_name="Table1", style_name="TableStyleMedium1", freeze_first_row=True)
+        format_excel_columns(filename, format_numbers, logger, format_columns)
 
     return
 
@@ -1117,7 +1117,9 @@ def initializing(settings_file, screen):
 
     # 1. Arbeitsverzeichnis setzen, kann auch einen benutzerdefinierten Pfad akzeptieren
     try:
-        set_working_directory("default",logfile=None,screen=screen)
+        # Create temporary logger for early directory operations
+        temp_logger = create_extended_logger("depot_init.log", screen, script_name='depot_init')
+        set_working_directory("default", temp_logger)
         if screen:
             print("Info: Arbeitsverzeichnis initial auf Ausführungsordner gesetzt.")
     except Exception as e:
@@ -1130,7 +1132,7 @@ def initializing(settings_file, screen):
         return None
 
     # 2. Einstellungen aus der Datei 'depot_file_settings.txt' lesen
-    settings = settings_import(settings_file)
+    settings = settings_import(settings_file, temp_logger)
     if settings is None:
         if screen:
             print("ERROR: Einstellungen konnten nicht geladen werden.")
@@ -1142,7 +1144,11 @@ def initializing(settings_file, screen):
 
     # 3. Arbeitsverzeichnis auf Einstellung aus Settings setzen
     try:
-        set_working_directory((settings or {}).get('Paths', {}).get('path', ''),logfile=None,screen=screen)
+        # Use the same temporary logger for directory operations
+        path = (settings or {}).get('Paths', {}).get('path', '')
+        if not path:  # If path is empty or None, use default
+            path = "default"
+        set_working_directory(path, temp_logger)
         if screen:
             print("Info: Arbeitsverzeichnis erfolgreich gesetzt.")
     except Exception as e:
@@ -1179,7 +1185,7 @@ def initializing(settings_file, screen):
 
     # 5. Überprüfen, ob die erforderlichen Dateien verfügbar sind
     file_list = list(settings['Files'].values())
-    if not files_availability_check(file_list, logfile, screen=screen):
+    if not files_availability_check(file_list, temp_logger):
         if screen:
             print("ERROR: Eine oder mehrere Dateien fehlen.")
         error_count += 1
@@ -1258,7 +1264,7 @@ def instruments_import_and_process(settings, logger):
         if (settings or {}).get('Export', {}).get('instruments_type_to_excel', {}):
             try:
                 if (settings or {}).get("Export", {}).get("instruments_type_to_excel", {}).get("enabled", False):
-                    export_df_to_excel(instruments_type_df, (settings or {}).get("Export", {}).get("instruments_type_to_excel", {}).get("filename", ""), logfile, screen=False)
+                    export_df_to_excel(instruments_type_df, (settings or {}).get("Export", {}).get("instruments_type_to_excel", {}).get("filename", ""), logger)
             except Exception as e:
                 logger.warning(f"Fehler beim Exportieren der Instruments-Type-Daten: {e}")
                 warning_count += 1
@@ -1299,7 +1305,7 @@ def prices_import_and_process(settings, instruments_df, logger):
     try:
         # 1. Prices-Datei (Kurse) importieren
         prices_file = (settings or {}).get('Files', {}).get('prices', '')
-        prices_df = import_parquet(prices_file, str(logger.log_file), screen=logger.screen_output)
+        prices_df = import_parquet(prices_file, logger)
         if prices_df is None:
             logger.error(f"Fehler beim Einlesen der Kurse-Datei '{prices_file}'.")
             error_count += 1
@@ -1625,7 +1631,7 @@ def values_type_month_after_provisions(values_type_month_df, provisions_month_df
                 if adjusted_df.loc[(date, 'cash'), 'type_value'] < 0:
                     adjusted_df.loc[(date, 'cash'), 'type_value'] = 0
                 
-                    warning_message = (f"WARNING: Der Wert von 'cash' am {date} wurde auf 0 gesetzt, da er kleiner als die Provision war.")
+                    warning_message = (f"Der Wert von 'cash' am {date} wurde auf 0 gesetzt, da er kleiner als die Provision war.")
                     logger.warning(warning_message)
 
         # Benenne die Spalte 'cash' in 'cash_invest' um
@@ -1718,25 +1724,25 @@ def values_vs_target(values_month_df, target_shares_df, prices_df, logger):
         # Extrahiere den jüngsten Eintrag aus values_month_df
         latest_date = values_month_df.index.get_level_values('date').max()
         values_actual_df = values_month_df.xs(latest_date, level='date')
-        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(values_actual_df, "values_actual_debug.xlsx", logfile, screen=False)
+        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(values_actual_df, "values_actual_debug.xlsx", logger)
         
         # Berechne den total_value als Summe über alle WKNs
         total_value = values_actual_df['value'].sum()
-        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(target_shares_df, "target_shares_debug.xlsx", logfile, screen=False)
+        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(target_shares_df, "target_shares_debug.xlsx", logger)
 
         # Sicherstellen, dass der Index von target_shares_df dem von values_actual_df entspricht
         target_shares_df = target_shares_df.reindex(values_actual_df.index)
-        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(target_shares_df, "target_shares_debug.xlsx", logfile, screen=False)
+        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(target_shares_df, "target_shares_debug.xlsx", logger)
                 
         # Erstelle den values_target_df
         values_target_df = values_actual_df.copy()
         values_target_df['value'] = total_value * target_shares_df['target_share']
-        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(values_target_df, "values_target_debug.xlsx", logfile, screen=False)
+        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(values_target_df, "values_target_debug.xlsx", logger)
             
         # Erstelle values_delta_df durch Subtraktion
         values_delta_df = values_actual_df['value'] - values_target_df['value']
         values_delta_df = values_delta_df.to_frame(name='delta')
-        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(values_delta_df, "values_delta_debug.xlsx", logfile, screen=False)
+        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(values_delta_df, "values_delta_debug.xlsx", logger)
         
         # Berechne den aktuellen Kurs für das jüngste Datum aus prices_df
         latest_prices_df = prices_df.xs(latest_date, level='date')
@@ -1744,12 +1750,12 @@ def values_vs_target(values_month_df, target_shares_df, prices_df, logger):
         # Vermeide Division durch 0, indem 0-Werte in 'price' durch NaN ersetzt werden (Division durch NaN ergibt NaN)
         latest_prices_df = latest_prices_df.copy()
         latest_prices_df['price'] = latest_prices_df['price'].replace(0, np.nan)
-        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(latest_prices_df, "latest_prices_debug.xlsx", logfile, screen=False)
+        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(latest_prices_df, "latest_prices_debug.xlsx", logger)
         
         # Berechne buy_sell_df
         buy_sell_df = values_delta_df['delta'] / latest_prices_df['price']
         buy_sell_df = buy_sell_df.to_frame(name='buy_sell')
-        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(buy_sell_df, "buy_sell_debug.xlsx", logfile, screen=False)
+        if (settings or {}).get('Output', {}).get('debug', False): export_df_to_excel(buy_sell_df, "buy_sell_debug.xlsx", logger)
         
         # Ergebnis-Log und Rückgabe
         logger.info("Abweichungen von Zielporfolio erfolgreich berechnet.")
@@ -1953,7 +1959,7 @@ def export_overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df
 
     overview_day_df = overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df, logger)
     if (settings or {}).get("Export", {}).get("overview_day_to_excel", {}).get("enabled", False):
-        export_df_to_excel(overview_day_df, (settings or {}).get("Export", {}).get("overview_day_to_excel", {}).get("filename", ""), str(logger.log_file), screen=logger.screen_output)
+        export_df_to_excel(overview_day_df, (settings or {}).get("Export", {}).get("overview_day_to_excel", {}).get("filename", ""), logger)
 
     values_month_df = df_to_eom(values_day_df)
     unrealized_gains_losses_month_df = df_2D_sum_per_period(unrealized_gains_losses_day_df, 'month')
@@ -1961,10 +1967,10 @@ def export_overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df
 
     overview_month_df = overview(values_month_df, unrealized_gains_losses_month_df, invest_month_df, logger)
     if (settings or {}).get("Export", {}).get("overview_month_to_excel", {}).get("enabled", False):
-        export_df_to_excel(overview_month_df, (settings or {}).get("Export", {}).get("overview_month_to_excel", {}).get("filename", ""), logfile, screen=False)
+        export_df_to_excel(overview_month_df, (settings or {}).get("Export", {}).get("overview_month_to_excel", {}).get("filename", ""), logger)
     if (settings or {}).get("Export", {}).get("overview_month_to_excel", {}).get("enabled", False):
-        format_excel_as_table_with_freeze((settings or {}).get("Export", {}).get("overview_month_to_excel", {}).get("filename", ""), table_name="Table1", style_name="TableStyleMedium1", freeze_first_row=True, logfile=logfile, screen=False)
-        format_excel_columns((settings or {}).get("Export", {}).get("overview_month_to_excel", {}).get("filename", ""),format_numbers, format_columns, logfile, screen=False)
+        format_excel_as_table_with_freeze((settings or {}).get("Export", {}).get("overview_month_to_excel", {}).get("filename", ""), logger, table_name="Table1", style_name="TableStyleMedium1", freeze_first_row=True)
+        format_excel_columns((settings or {}).get("Export", {}).get("overview_month_to_excel", {}).get("filename", ""), format_numbers, logger, format_columns)
     
     
     values_year_df = df_to_eoy(values_day_df)
@@ -1973,10 +1979,10 @@ def export_overview(values_day_df, unrealized_gains_losses_day_df, invest_day_df
 
     overview_year_df = overview(values_year_df, unrealized_gains_losses_year_df, invest_year_df, logger)
     if (settings or {}).get("Export", {}).get("overview_year_to_excel", {}).get("enabled", False):
-        export_df_to_excel(overview_year_df, (settings or {}).get("Export", {}).get("overview_year_to_excel", {}).get("filename", ""), logfile, screen=False)
+        export_df_to_excel(overview_year_df, (settings or {}).get("Export", {}).get("overview_year_to_excel", {}).get("filename", ""), logger)
     if (settings or {}).get("Export", {}).get("overview_year_to_excel", {}).get("enabled", False):
-        format_excel_as_table_with_freeze((settings or {}).get("Export", {}).get("overview_year_to_excel", {}).get("filename", ""), table_name="Table1", style_name="TableStyleMedium1", freeze_first_row=True, logfile=logfile, screen=False)
-        format_excel_columns((settings or {}).get("Export", {}).get("overview_year_to_excel", {}).get("filename", ""),format_numbers, format_columns, logfile, screen=False)
+        format_excel_as_table_with_freeze((settings or {}).get("Export", {}).get("overview_year_to_excel", {}).get("filename", ""), logger, table_name="Table1", style_name="TableStyleMedium1", freeze_first_row=True)
+        format_excel_columns((settings or {}).get("Export", {}).get("overview_year_to_excel", {}).get("filename", ""), format_numbers, logger, format_columns)
 
     return
 
@@ -1992,14 +1998,18 @@ if __name__ == "__main__":
     screen=(settings or {}).get('Output', {}).get('screen', False)
 
     # Initialize ahlib logger
-    logger = create_extended_logger(logfile, screen, script_name='depot')
-    logger.info("START: Programm wird gestartet")
+    script_name = os.path.splitext(os.path.basename(__file__))[0]
+    logger = create_extended_logger(logfile, screen, script_name=script_name)
+    logger.info(f"Programm {script_name} wird gestartet")
 
     # 2. Instruments
     instruments_df, instruments_region_df, instruments_type_df = instruments_import_and_process(settings, logger)
 
     # 3. Prices-Datei (Kurse) importieren, verarbeiten und überwachen
     prices_df = prices_import_and_process(settings, instruments_df, logger)
+    if prices_df is None:
+        logger.error("Prices-Datei konnte nicht geladen werden. Beende das Programm.")
+        exit(1)
     end_date = prices_df.index.get_level_values('date').max()
     start_date = prices_df.index.get_level_values('date').min()
 
@@ -2021,7 +2031,7 @@ if __name__ == "__main__":
     values_month_banks_df = df_to_eom(values_day_banks_df)
     logger.info('Werte (values) daily erfolgreich auf Monatsebene reduziert')
     if (settings or {}).get("Export", {}).get("values_month_banks_to_excel", {}).get("enabled", False):
-        export_df_to_excel(values_month_banks_df, (settings or {}).get("Export", {}).get("values_month_banks_to_excel", {}).get("filename", ""), logfile, screen=False)
+        export_df_to_excel(values_month_banks_df, (settings or {}).get("Export", {}).get("values_month_banks_to_excel", {}).get("filename", ""), logger)
 
     # 6.3. Aggregiere die Werte in values_month_banks_df über alle Banken
     values_month_df = aggregate_banks(values_month_banks_df)
@@ -2040,7 +2050,7 @@ if __name__ == "__main__":
     # 6.6. Aggregiere die Werte in values_year_banks_df über alle Banken
     #values_year_df = aggregate_banks(values_year_banks_df)
     #screen_and_log('Info: Werte (values) auf Jahresebene über Banken erfolgreich aggregiert', logfile, screen=screen)
-    #if settings['Export']['values_year_to_excel']: export_df_to_excel(values_year_df, "values_year_export.xlsx", logfile, screen=False)
+    #if settings['Export']['values_year_to_excel']: export_df_to_excel(values_year_df, "values_year_export.xlsx", logger)
     #export_2D_df_to_excel_pivot(values_year_df, "values_year_pivot_export.xlsx", logfile, screen=False)
    
 
@@ -2060,13 +2070,13 @@ if __name__ == "__main__":
 
     fees_bank_df=fees_import(bookings_filename, logger)
     if (settings or {}).get("Export", {}).get("fees_bank_to_excel", {}).get("enabled", False):
-        export_df_to_excel(fees_bank_df, (settings or {}).get("Export", {}).get("fees_bank_to_excel", {}).get("filename", ""), str(logger.log_file), screen=logger.screen_output)
+        export_df_to_excel(fees_bank_df, (settings or {}).get("Export", {}).get("fees_bank_to_excel", {}).get("filename", ""), logger)
     fees_df=aggregate_banks(fees_bank_df)
     export_2D_df_to_excel_format(fees_df, (settings or {}).get("Export", {}).get("fees_to_excel", {}), logger)
         
     taxes_bank_df=taxes_import(bookings_filename, logger)
     if (settings or {}).get("Export", {}).get("taxes_bank_to_excel", {}).get("enabled", False):
-        export_df_to_excel(taxes_bank_df, (settings or {}).get("Export", {}).get("taxes_bank_to_excel", {}).get("filename", ""), logfile, screen=False)
+        export_df_to_excel(taxes_bank_df, (settings or {}).get("Export", {}).get("taxes_bank_to_excel", {}).get("filename", ""), logger)
     taxes_df=aggregate_banks(taxes_bank_df)
     
    
@@ -2074,7 +2084,7 @@ if __name__ == "__main__":
     bookings_filename = (settings or {}).get('Files', {}).get('bookings', '')
     interest_dividends_bank_df=interest_dividends_import(bookings_filename, logger)
     if (settings or {}).get("Export", {}).get("interest_dividends_bank_to_excel", {}).get("enabled", False):
-        export_df_to_excel(interest_dividends_bank_df, (settings or {}).get("Export", {}).get("interest_dividends_bank_to_excel", {}).get("filename", ""), logfile, screen=False)
+        export_df_to_excel(interest_dividends_bank_df, (settings or {}).get("Export", {}).get("interest_dividends_bank_to_excel", {}).get("filename", ""), logger)
     interest_dividends_df=aggregate_banks(interest_dividends_bank_df)
 
     # 7.3. Transaction_value_at_price (Käufe und Verkäufe zum Kurswert)
@@ -2135,7 +2145,7 @@ if __name__ == "__main__":
         sys.exit(1)  # Programm beenden, wenn die Provisionsdaten nicht erfolgreich verarbeitet wurden
     if (settings or {}).get('Export', {}).get('provisions_month_to_excel', {}):
         if (settings or {}).get("Export", {}).get("provisions_month_to_excel", {}).get("enabled", False):
-            export_df_to_excel(provisions_month_df, (settings or {}).get("Export", {}).get("provisions_month_to_excel", {}).get("filename", ""), logfile, screen=False)
+            export_df_to_excel(provisions_month_df, (settings or {}).get("Export", {}).get("provisions_month_to_excel", {}).get("filename", ""), logger)
 
     # 10.2. Anpassung von values_month_df basierend auf provisions_month_df
     #
@@ -2159,7 +2169,7 @@ if __name__ == "__main__":
         # 10.5. Rebalancing Vorschlag
         buy_sell_df=values_vs_target(values_month_df, target_shares_df, prices_df, logger)
         if (settings or {}).get("Export", {}).get("buy_sell_to_excel", {}).get("enabled", False):
-            export_df_to_excel(buy_sell_df, (settings or {}).get("Export", {}).get("buy_sell_to_excel", {}).get("filename", ""), logfile, screen=False)
+            export_df_to_excel(buy_sell_df, (settings or {}).get("Export", {}).get("buy_sell_to_excel", {}).get("filename", ""), logger)
 
 
     else:
@@ -2206,10 +2216,10 @@ if __name__ == "__main__":
     depots_fuer_finance_df = depots_fuer_finance(values_month_banks_df, logger)
     if depots_fuer_finance_df is not None:
         if (settings or {}).get("Export", {}).get("depots_fuer_finance_to_excel", {}).get("enabled", False):
-            export_df_to_excel(depots_fuer_finance_df, (settings or {}).get("Export", {}).get("depots_fuer_finance_to_excel", {}).get("filename", ""), logfile, screen=False)
+            export_df_to_excel(depots_fuer_finance_df, (settings or {}).get("Export", {}).get("depots_fuer_finance_to_excel", {}).get("filename", ""), logger)
         if (settings or {}).get("Export", {}).get("depots_fuer_finance_to_excel", {}).get("enabled", False):
-            format_excel_as_table_with_freeze((settings or {}).get("Export", {}).get("depots_fuer_finance_to_excel", {}).get("filename", ""), logfile, screen=False)
-            format_excel_columns((settings or {}).get("Export", {}).get("depots_fuer_finance_to_excel", {}).get("filename", ""),["DD.MM.YY","#,##0.00"],[12,12], logfile, screen=False)
+            format_excel_as_table_with_freeze((settings or {}).get("Export", {}).get("depots_fuer_finance_to_excel", {}).get("filename", ""), logger)
+            format_excel_columns((settings or {}).get("Export", {}).get("depots_fuer_finance_to_excel", {}).get("filename", ""), ["DD.MM.YY","#,##0.00"], logger, [12,12])
 
 
         
