@@ -1144,7 +1144,7 @@ def yield_components_day(gains_losses_before_fees_taxes_df, fees_df, taxes_df, i
         result = result.join(taxes_df, how='left') if taxes_df is not None else result
 
         # Fehlende Werte mit 0 auffüllen (nur für die Komponenten, nicht für value)
-        for col in ['gains_losses_before_fees_taxes', 'interests_dividends', 'fees', 'taxes']:
+        for col in ['gains_losses_before_fees_taxes', 'interest_dividends', 'fees', 'taxes']:
             if col not in result.columns:
                 result[col] = 0.0
             else:
@@ -1168,7 +1168,7 @@ def yield_components_day(gains_losses_before_fees_taxes_df, fees_df, taxes_df, i
             result.loc[non_zero_mask, 'gains_losses_before_fees_taxes'] / result.loc[non_zero_mask, 'value']
         )
         result.loc[non_zero_mask, 'yield_dividends'] = (
-            result.loc[non_zero_mask, 'interests_dividends'] / result.loc[non_zero_mask, 'value']
+            result.loc[non_zero_mask, 'interest_dividends'] / result.loc[non_zero_mask, 'value']
         )
         result.loc[non_zero_mask, 'yield_fees'] = (
             result.loc[non_zero_mask, 'fees'] / result.loc[non_zero_mask, 'value']
