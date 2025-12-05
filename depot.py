@@ -2340,12 +2340,20 @@ if __name__ == "__main__":
             values_day_df,
             logger
         )
-        export_2D_df_to_excel_format(
-            yield_components_day_df,
-            (settings or {}).get("Export", {}).get("yield_components_day_to_excel", {}),
-            logger
-        )
-        logger.info("Detaillierte Renditekomponenten (Tag) erfolgreich berechnet und exportiert.")
+
+        # Exportiere jede Komponente als separate Datei (analog zu bestehenden Exporten)
+        component_columns = ['yield_price', 'yield_dividends', 'yield_fees', 'yield_taxes', 'yield_total']
+        export_keys = ['yield_price_day_to_excel', 'yield_dividends_day_to_excel',
+                       'yield_fees_day_to_excel', 'yield_taxes_day_to_excel', 'yield_total_day_to_excel']
+
+        for col, key in zip(component_columns, export_keys):
+            export_2D_df_to_excel_format(
+                yield_components_day_df[[col]],
+                (settings or {}).get("Export", {}).get(key, {}),
+                logger
+            )
+
+        logger.info("Detaillierte Renditekomponenten (Tag) erfolgreich berechnet und als 5 separate Dateien exportiert.")
     except Exception as e:
         logger.error(f"Fehler bei Berechnung der Renditekomponenten (Tag): {e}")
         logger.error("Programmausführung wird fortgesetzt, aber yield_components_day_df ist nicht verfügbar.")
@@ -2360,12 +2368,21 @@ if __name__ == "__main__":
                 values_day_df,
                 logger
             )
-            export_2D_df_to_excel_format(
-                yield_components_year_df,
-                (settings or {}).get("Export", {}).get("yield_components_year_to_excel", {}),
-                logger
-            )
-            logger.info("Jährliche Renditekomponenten erfolgreich berechnet und exportiert.")
+
+            # Exportiere jede Komponente als separate Datei
+            component_columns = ['annual_yield_price', 'annual_yield_dividends', 'annual_yield_fees',
+                                'annual_yield_taxes', 'annual_yield_total']
+            export_keys = ['yield_price_year_to_excel', 'yield_dividends_year_to_excel',
+                          'yield_fees_year_to_excel', 'yield_taxes_year_to_excel', 'yield_total_year_to_excel']
+
+            for col, key in zip(component_columns, export_keys):
+                export_2D_df_to_excel_format(
+                    yield_components_year_df[[col]],
+                    (settings or {}).get("Export", {}).get(key, {}),
+                    logger
+                )
+
+            logger.info("Jährliche Renditekomponenten erfolgreich berechnet und als 5 separate Dateien exportiert.")
         except Exception as e:
             logger.error(f"Fehler bei Berechnung der jährlichen Renditekomponenten: {e}")
             logger.error("Programmausführung wird fortgesetzt.")
