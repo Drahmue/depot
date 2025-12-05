@@ -1095,8 +1095,215 @@ def yield_year_from_values_day(yield_excl_div_day, values_day, logger):
         return None
 
 
+# Renditekomponenten detailliert: Kursrendite, Dividenden, Gebühren, Steuern, Gesamtrendite
+def yield_components_day(gains_losses_before_fees_taxes_df, fees_df, taxes_df, interest_dividends_df, values_day_df, logger):
+    """
+    Berechnet die detaillierten Renditekomponenten pro WKN und Tag.
+    Trennt die Gesamtrendite in ihre Bestandteile auf:
+    - yield_price: Reine Kursrendite (ohne Dividenden, Gebühren, Steuern)
+    - yield_dividends: Rendite aus Zinsen/Dividenden
+    - yield_fees: Belastung durch Gebühren (negativ)
+    - yield_taxes: Belastung durch Steuern (negativ)
+    - yield_total: Gesamtrendite (Summe aller Komponenten)
 
-    
+    Parameter:
+        gains_losses_before_fees_taxes_df (DataFrame): MultiIndex (date, wkn), Spalte 'gains_losses_before_fees_taxes'
+        fees_df (DataFrame): MultiIndex (date, wkn), Spalte 'fees'
+        taxes_df (DataFrame): MultiIndex (date, wkn), Spalte 'taxes'
+        interest_dividends_df (DataFrame): MultiIndex (date, wkn), Spalte 'interests_dividends'
+        values_day_df (DataFrame): MultiIndex (date, wkn), Spalte 'value'
+        logger (ExtendedLogger): Logger instance for output and logging.
+
+    Rückgabe:
+        DataFrame: MultiIndex (date, wkn) mit Spalten:
+                   ['yield_price', 'yield_dividends', 'yield_fees', 'yield_taxes', 'yield_total']
+    """
+    try:
+        # Validierung der Eingabedaten
+        if values_day_df is None or values_day_df.empty:
+            raise ValueError("values_day_df ist None oder leer - kann Rendite nicht berechnen")
+
+        if gains_losses_before_fees_taxes_df is None or gains_losses_before_fees_taxes_df.empty:
+            raise ValueError("gains_losses_before_fees_taxes_df ist None oder leer - kann Kursrendite nicht berechnen")
+
+        if 'value' not in values_day_df.columns:
+            raise ValueError(f"Spalte 'value' fehlt in values_day_df. Vorhandene Spalten: {values_day_df.columns.tolist()}")
+
+        if 'gains_losses_before_fees_taxes' not in gains_losses_before_fees_taxes_df.columns:
+            raise ValueError(f"Spalte 'gains_losses_before_fees_taxes' fehlt in gains_losses_before_fees_taxes_df. Vorhandene Spalten: {gains_losses_before_fees_taxes_df.columns.tolist()}")
+
+        logger.info("Starte Berechnung der Renditekomponenten (yield_components_day)...")
+
+        # Basis: values_day_df als Ausgangspunkt
+        result = values_day_df[['value']].copy()
+
+        # Join aller Komponenten
+        result = result.join(gains_losses_before_fees_taxes_df[['gains_losses_before_fees_taxes']], how='left')
+        result = result.join(interest_dividends_df, how='left') if interest_dividends_df is not None else result
+        result = result.join(fees_df, how='left') if fees_df is not None else result
+        result = result.join(taxes_df, how='left') if taxes_df is not None else result
+
+        # Fehlende Werte mit 0 auffüllen (nur für die Komponenten, nicht für value)
+        for col in ['gains_losses_before_fees_taxes', 'interests_dividends', 'fees', 'taxes']:
+            if col not in result.columns:
+                result[col] = 0.0
+            else:
+                result[col] = result[col].fillna(0.0)
+
+        # Prüfen auf Division durch Null
+        zero_values = result['value'] == 0
+        if zero_values.any():
+            count_zeros = zero_values.sum()
+            logger.warning(f"{count_zeros} Einträge mit value=0 gefunden - setze Rendite auf 0.0")
+
+        # Renditekomponenten berechnen (nur wo value > 0)
+        result['yield_price'] = 0.0
+        result['yield_dividends'] = 0.0
+        result['yield_fees'] = 0.0
+        result['yield_taxes'] = 0.0
+
+        non_zero_mask = result['value'] > 0
+
+        result.loc[non_zero_mask, 'yield_price'] = (
+            result.loc[non_zero_mask, 'gains_losses_before_fees_taxes'] / result.loc[non_zero_mask, 'value']
+        )
+        result.loc[non_zero_mask, 'yield_dividends'] = (
+            result.loc[non_zero_mask, 'interests_dividends'] / result.loc[non_zero_mask, 'value']
+        )
+        result.loc[non_zero_mask, 'yield_fees'] = (
+            result.loc[non_zero_mask, 'fees'] / result.loc[non_zero_mask, 'value']
+        )
+        result.loc[non_zero_mask, 'yield_taxes'] = (
+            result.loc[non_zero_mask, 'taxes'] / result.loc[non_zero_mask, 'value']
+        )
+
+        # Gesamtrendite = Summe aller Komponenten
+        result['yield_total'] = (
+            result['yield_price'] +
+            result['yield_dividends'] +
+            result['yield_fees'] +      # fees sind bereits negativ
+            result['yield_taxes']       # taxes sind bereits negativ
+        )
+
+        # Prüfen auf inf/-inf Werte
+        inf_mask = np.isinf(result[['yield_price', 'yield_dividends', 'yield_fees', 'yield_taxes', 'yield_total']]).any(axis=1)
+        if inf_mask.any():
+            count_inf = inf_mask.sum()
+            logger.error(f"{count_inf} Einträge mit inf/-inf Werten gefunden - dies deutet auf einen Fehler hin")
+            raise ValueError(f"{count_inf} Einträge mit unendlichen Werten in Renditeberechnung - bitte Daten prüfen")
+
+        # Nur Rendite-Spalten zurückgeben
+        result_df = result[['yield_price', 'yield_dividends', 'yield_fees', 'yield_taxes', 'yield_total']]
+
+        logger.info(f"Renditekomponenten erfolgreich berechnet: {len(result_df)} Einträge")
+        logger.info(f"Durchschnittliche Gesamtrendite: {result_df['yield_total'].mean():.6f}")
+
+        return result_df
+
+    except ValueError as ve:
+        logger.error(f"Validierungsfehler bei yield_components_day: {ve}")
+        raise
+    except KeyError as ke:
+        logger.error(f"Spalten-Fehler bei yield_components_day: {ke}")
+        raise
+    except Exception as e:
+        logger.error(f"Unerwarteter Fehler bei yield_components_day: {type(e).__name__}: {e}")
+        raise
+
+
+# Kumulierte Jahresrendite für alle Renditekomponenten
+def yield_components_year(yield_components_day_df, values_day_df, logger):
+    """
+    Berechnet die kumulierte jährliche Rendite für alle Renditekomponenten.
+    Verwendet die Time-Weighted Return (TWR) Formel: Produkt(1 + tägliche_rendite) - 1
+    Gruppiert nach dem letzten Datum je Jahr und WKN.
+
+    Parameter:
+        yield_components_day_df (DataFrame): MultiIndex (date, wkn), Spalten:
+                                             ['yield_price', 'yield_dividends', 'yield_fees', 'yield_taxes', 'yield_total']
+        values_day_df (DataFrame): MultiIndex (date, wkn), Spalte 'value'
+        logger (ExtendedLogger): Logger instance for output and logging.
+
+    Rückgabe:
+        DataFrame: MultiIndex (last_date_per_year, wkn), Spalten:
+                   ['annual_yield_price', 'annual_yield_dividends', 'annual_yield_fees',
+                    'annual_yield_taxes', 'annual_yield_total']
+    """
+    try:
+        # Validierung der Eingabedaten
+        if yield_components_day_df is None or yield_components_day_df.empty:
+            raise ValueError("yield_components_day_df ist None oder leer")
+
+        if values_day_df is None or values_day_df.empty:
+            raise ValueError("values_day_df ist None oder leer")
+
+        required_columns = ['yield_price', 'yield_dividends', 'yield_fees', 'yield_taxes', 'yield_total']
+        missing_columns = [col for col in required_columns if col not in yield_components_day_df.columns]
+        if missing_columns:
+            raise ValueError(f"Fehlende Spalten in yield_components_day_df: {missing_columns}")
+
+        logger.info("Starte Berechnung der jährlichen Renditekomponenten (yield_components_year)...")
+
+        # Index sicherstellen: datetime + wkn
+        yield_comp = yield_components_day_df.copy()
+        yield_comp.index = pd.MultiIndex.from_arrays([
+            pd.to_datetime(yield_comp.index.get_level_values('date')),
+            yield_comp.index.get_level_values('wkn')
+        ], names=['date', 'wkn'])
+
+        # Join mit values_day (für Bestandsprüfung)
+        yield_and_value = yield_comp.join(values_day_df[['value']], how='inner')
+
+        # Nur Tage mit positivem Bestand
+        yield_and_value = yield_and_value[yield_and_value['value'] > 0]
+
+        if yield_and_value.empty:
+            raise ValueError("Keine Einträge mit positivem Bestand gefunden")
+
+        # Extrahiere Jahr separat für Gruppierung
+        yield_and_value['year'] = yield_and_value.index.get_level_values('date').year
+
+        # Ermittle pro (Jahr, WKN) das letzte Datum
+        last_dates = (
+            yield_and_value.reset_index()
+            .groupby(['year', 'wkn'])['date']
+            .max()
+            .reset_index()
+            .rename(columns={'date': 'last_date'})
+        )
+
+        # Merge, um jedem Tageswert den zugehörigen "Jahresendstempel" zu geben
+        merged = yield_and_value.reset_index().merge(last_dates, on=['year', 'wkn'])
+
+        # Gruppiere nach (last_date, wkn) und berechne TWR für jede Komponente
+        def calculate_twr(series):
+            """Time-Weighted Return: Produkt(1 + r) - 1"""
+            return np.prod(1 + series) - 1
+
+        grouped = merged.groupby(['last_date', 'wkn'])
+
+        result = pd.DataFrame({
+            'annual_yield_price': grouped['yield_price'].apply(calculate_twr),
+            'annual_yield_dividends': grouped['yield_dividends'].apply(calculate_twr),
+            'annual_yield_fees': grouped['yield_fees'].apply(calculate_twr),
+            'annual_yield_taxes': grouped['yield_taxes'].apply(calculate_twr),
+            'annual_yield_total': grouped['yield_total'].apply(calculate_twr)
+        })
+
+        logger.info(f"Jährliche Renditekomponenten erfolgreich berechnet: {len(result)} Jahres-WKN-Kombinationen")
+        logger.info(f"Durchschnittliche jährliche Gesamtrendite: {result['annual_yield_total'].mean():.6f}")
+
+        return result
+
+    except ValueError as ve:
+        logger.error(f"Validierungsfehler bei yield_components_year: {ve}")
+        raise
+    except Exception as e:
+        logger.error(f"Unerwarteter Fehler bei yield_components_year: {type(e).__name__}: {e}")
+        raise
+
+
+
 # Main Block 01: Initializing    
 def initializing(settings_file, screen):
     """
@@ -2121,6 +2328,49 @@ if __name__ == "__main__":
         logger.info("Kumulative jährliche Rendite erfolgreich berechnet und exportiert.")
     else:
         logger.warning("Kumulative jährliche Rendite (Yield) konnte nicht erstellt werden.")
+
+    # 7.9. Renditekomponenten detailliert (Kursrendite, Dividenden, Gebühren, Steuern, Gesamtrendite)
+    try:
+        logger.info("Berechne detaillierte Renditekomponenten...")
+        yield_components_day_df = yield_components_day(
+            gains_losses_before_fees_taxes_day_df,
+            fees_df,
+            taxes_df,
+            interest_dividends_df,
+            values_day_df,
+            logger
+        )
+        export_2D_df_to_excel_format(
+            yield_components_day_df,
+            (settings or {}).get("Export", {}).get("yield_components_day_to_excel", {}),
+            logger
+        )
+        logger.info("Detaillierte Renditekomponenten (Tag) erfolgreich berechnet und exportiert.")
+    except Exception as e:
+        logger.error(f"Fehler bei Berechnung der Renditekomponenten (Tag): {e}")
+        logger.error("Programmausführung wird fortgesetzt, aber yield_components_day_df ist nicht verfügbar.")
+        yield_components_day_df = None
+
+    # 7.10. Jährliche Renditekomponenten (kumuliert)
+    if yield_components_day_df is not None:
+        try:
+            logger.info("Berechne jährliche Renditekomponenten...")
+            yield_components_year_df = yield_components_year(
+                yield_components_day_df,
+                values_day_df,
+                logger
+            )
+            export_2D_df_to_excel_format(
+                yield_components_year_df,
+                (settings or {}).get("Export", {}).get("yield_components_year_to_excel", {}),
+                logger
+            )
+            logger.info("Jährliche Renditekomponenten erfolgreich berechnet und exportiert.")
+        except Exception as e:
+            logger.error(f"Fehler bei Berechnung der jährlichen Renditekomponenten: {e}")
+            logger.error("Programmausführung wird fortgesetzt.")
+    else:
+        logger.warning("Jährliche Renditekomponenten können nicht berechnet werden (yield_components_day_df fehlt).")
 
 
     # 8. invest (Einschuss/Entnahme)
