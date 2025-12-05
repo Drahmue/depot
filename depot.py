@@ -1096,7 +1096,7 @@ def yield_year_from_values_day(yield_excl_div_day, values_day, logger):
 
 
 # Renditekomponenten detailliert: Kursrendite, Dividenden, Gebühren, Steuern, Gesamtrendite
-def yield_components_day(gains_losses_before_fees_taxes_df, fees_df, taxes_df, interest_dividends_df, values_day_df, logger):
+def yield_components_day(gains_losses_before_fees_taxes_df, fees_df, taxes_df, interest_dividends_df, values_day_df, transaction_value_at_price_df, logger):
     """
     Berechnet die detaillierten Renditekomponenten pro WKN und Tag.
     Trennt die Gesamtrendite in ihre Bestandteile auf:
@@ -1106,12 +1106,17 @@ def yield_components_day(gains_losses_before_fees_taxes_df, fees_df, taxes_df, i
     - yield_taxes: Belastung durch Steuern (negativ)
     - yield_total: Gesamtrendite (Summe aller Komponenten)
 
+    Bei großen Transaktionen (Käufe/Verkäufe) werden Gebühren und Steuern
+    auf den Transaktionswert bezogen, nicht auf den End-Portfoliowert,
+    um extreme Prozentsätze zu vermeiden.
+
     Parameter:
         gains_losses_before_fees_taxes_df (DataFrame): MultiIndex (date, wkn), Spalte 'gains_losses_before_fees_taxes'
         fees_df (DataFrame): MultiIndex (date, wkn), Spalte 'fees'
         taxes_df (DataFrame): MultiIndex (date, wkn), Spalte 'taxes'
-        interest_dividends_df (DataFrame): MultiIndex (date, wkn), Spalte 'interests_dividends'
+        interest_dividends_df (DataFrame): MultiIndex (date, wkn), Spalte 'interest_dividends'
         values_day_df (DataFrame): MultiIndex (date, wkn), Spalte 'value'
+        transaction_value_at_price_df (DataFrame): MultiIndex (date, wkn), Spalte 'transaction_value_at_price'
         logger (ExtendedLogger): Logger instance for output and logging.
 
     Rückgabe:
@@ -1142,9 +1147,10 @@ def yield_components_day(gains_losses_before_fees_taxes_df, fees_df, taxes_df, i
         result = result.join(interest_dividends_df, how='left') if interest_dividends_df is not None else result
         result = result.join(fees_df, how='left') if fees_df is not None else result
         result = result.join(taxes_df, how='left') if taxes_df is not None else result
+        result = result.join(transaction_value_at_price_df, how='left') if transaction_value_at_price_df is not None else result
 
         # Fehlende Werte mit 0 auffüllen (nur für die Komponenten, nicht für value)
-        for col in ['gains_losses_before_fees_taxes', 'interest_dividends', 'fees', 'taxes']:
+        for col in ['gains_losses_before_fees_taxes', 'interest_dividends', 'fees', 'taxes', 'transaction_value_at_price']:
             if col not in result.columns:
                 result[col] = 0.0
             else:
@@ -1164,18 +1170,35 @@ def yield_components_day(gains_losses_before_fees_taxes_df, fees_df, taxes_df, i
 
         non_zero_mask = result['value'] > 0
 
-        result.loc[non_zero_mask, 'yield_price'] = (
-            result.loc[non_zero_mask, 'gains_losses_before_fees_taxes'] / result.loc[non_zero_mask, 'value']
+        # Intelligente Nenner-Wahl für alle Rendite-Komponenten
+        # Bei großen Transaktionen (|transaction| > 50% des Portfoliowerts) nutze Transaktionswert als Nenner
+        # um extreme Prozentsätze bei fast vollständigen Verkäufen zu vermeiden
+        abs_transaction = result['transaction_value_at_price'].abs()
+
+        # Bestimme den Nenner: transaction_value wenn groß, sonst value
+        denominator = result['value'].copy()
+        large_transaction_mask = (abs_transaction > result['value'] * 0.5) & (abs_transaction > 0)
+        denominator.loc[large_transaction_mask] = abs_transaction.loc[large_transaction_mask]
+
+        # Berechne alle Komponenten mit intelligentem Nenner
+        valid_denominator_mask = (denominator > 0) & non_zero_mask
+
+        result.loc[valid_denominator_mask, 'yield_price'] = (
+            result.loc[valid_denominator_mask, 'gains_losses_before_fees_taxes'] / denominator.loc[valid_denominator_mask]
         )
-        result.loc[non_zero_mask, 'yield_dividends'] = (
-            result.loc[non_zero_mask, 'interest_dividends'] / result.loc[non_zero_mask, 'value']
+        result.loc[valid_denominator_mask, 'yield_dividends'] = (
+            result.loc[valid_denominator_mask, 'interest_dividends'] / denominator.loc[valid_denominator_mask]
         )
-        result.loc[non_zero_mask, 'yield_fees'] = (
-            result.loc[non_zero_mask, 'fees'] / result.loc[non_zero_mask, 'value']
+        result.loc[valid_denominator_mask, 'yield_fees'] = (
+            result.loc[valid_denominator_mask, 'fees'] / denominator.loc[valid_denominator_mask]
         )
-        result.loc[non_zero_mask, 'yield_taxes'] = (
-            result.loc[non_zero_mask, 'taxes'] / result.loc[non_zero_mask, 'value']
+        result.loc[valid_denominator_mask, 'yield_taxes'] = (
+            result.loc[valid_denominator_mask, 'taxes'] / denominator.loc[valid_denominator_mask]
         )
+
+        # Logging für große Transaktionen
+        if large_transaction_mask.sum() > 0:
+            logger.info(f"{large_transaction_mask.sum()} Einträge mit großen Transaktionen erkannt - nutze Transaktionswert als Nenner für alle Komponenten")
 
         # Gesamtrendite = Summe aller Komponenten
         result['yield_total'] = (
@@ -2338,6 +2361,7 @@ if __name__ == "__main__":
             taxes_df,
             interest_dividends_df,
             values_day_df,
+            transaction_value_at_price_day_df,
             logger
         )
 
