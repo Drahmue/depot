@@ -68,6 +68,65 @@ The application follows a structured 8-step data processing pipeline:
 
 ## Recent Changes
 
+### 2025-12-07 - Yearly Profitability Analysis Table with Cash Exclusion
+
+**Feature Implemented:**
+- New yearly profitability table showing holding periods and annual yields per instrument
+- Cash excluded from all profitability calculations to avoid data quality issues
+- Custom Excel export with formatted table, column-specific number formats, and 90° rotated headers
+
+**New Components:**
+
+1. **Lines 1329-1428: `profitability_year_table()` function**
+   - Creates profitability table with years as rows
+   - Two columns per WKN: `{wkn}_days` (holding period) and `{wkn}_yield` (annual return)
+   - Uses Time-Weighted Return (TWR) formula: `∏(1 + daily_yield) - 1`
+   - Provides transparency for partial-year holdings (e.g., 101 days vs 365 days)
+
+2. **Lines 1142-1173: Cash filtering in `yield_components_day()`**
+   - Excludes 'cash' from all yield calculations
+   - Filters applied to: values_day, gains_losses, interest_dividends, fees, taxes, transaction_value
+   - Prevents issues from missing transaction_value_at_price in cash bookings
+   - CM (call money) and FTD (fixed-term deposit) still included with profitability tracking
+
+3. **Lines 1358-1360: Cash filtering in `profitability_year_table()`**
+   - Additional filter to exclude cash from yearly aggregation
+   - Ensures cash never appears in profitability reports
+
+4. **Lines 2554-2634: Custom openpyxl export for profitability_year.xlsx**
+   - Dynamic column formatting based on column name patterns:
+     - `_days` columns → Integer format `#,##0`
+     - `_yield` columns → Percentage format `0.00%`
+   - Excel Table with TableStyleMedium9 style
+   - 90° text rotation for all headers (compact display)
+   - Custom column widths: year=8, days=4.57, yield=7.71
+   - No depot.ini maintenance required when adding new WKNs
+
+**Why Custom Export Instead of export_2D_df_to_excel_format:**
+- Cannot use standard 2D export function due to structure incompatibility
+- Transformation to (year, wkn) MultiIndex creates duplicate column names after unstack()
+- Custom export provides dynamic formatting without ini file maintenance
+- As portfolio grows, formatting automatically applies to new WKNs
+
+**Example Output Structure:**
+```
+year | a0f5uf_days | a0f5uf_yield | 843002_days | 843002_yield | ...
+2022 |         101 |       15.39% |         365 |       22.18% | ...
+2023 |         250 |       20.15% |         365 |       19.42% | ...
+2024 |         365 |       18.73% |         365 |       20.89% | ...
+```
+
+**Benefits:**
+- Transparent partial-year holdings (days column shows actual holding period)
+- Automatic formatting for unlimited number of WKNs
+- Clean separation of cash (excluded) vs investment instruments
+- Compact Excel table with professional formatting
+
+**Configuration:**
+- depot.ini line 57: `profitability_year_to_excel`
+- File: `profitability_year.xlsx`
+- Note: column_formats in ini are not used (custom formatting in code)
+
 ### 2025-12-06 - Intelligent Denominator Selection for Yield Calculations
 
 **Problem Solved:**

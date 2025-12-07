@@ -1139,15 +1139,38 @@ def yield_components_day(gains_losses_before_fees_taxes_df, fees_df, taxes_df, i
 
         logger.info("Starte Berechnung der Renditekomponenten (yield_components_day)...")
 
+        # Exclude 'cash' from profitability calculations
+        values_day_filtered = values_day_df[values_day_df.index.get_level_values('wkn').str.lower() != 'cash']
+        gains_losses_filtered = gains_losses_before_fees_taxes_df[gains_losses_before_fees_taxes_df.index.get_level_values('wkn').str.lower() != 'cash']
+
+        # Filter other DataFrames if they exist
+        interest_dividends_filtered = None
+        if interest_dividends_df is not None and not interest_dividends_df.empty:
+            interest_dividends_filtered = interest_dividends_df[interest_dividends_df.index.get_level_values('wkn').str.lower() != 'cash']
+
+        fees_filtered = None
+        if fees_df is not None and not fees_df.empty:
+            fees_filtered = fees_df[fees_df.index.get_level_values('wkn').str.lower() != 'cash']
+
+        taxes_filtered = None
+        if taxes_df is not None and not taxes_df.empty:
+            taxes_filtered = taxes_df[taxes_df.index.get_level_values('wkn').str.lower() != 'cash']
+
+        transaction_value_filtered = None
+        if transaction_value_at_price_df is not None and not transaction_value_at_price_df.empty:
+            transaction_value_filtered = transaction_value_at_price_df[transaction_value_at_price_df.index.get_level_values('wkn').str.lower() != 'cash']
+
+        logger.info("Cash ausgeschlossen von yield_components_day Berechnung")
+
         # Basis: values_day_df als Ausgangspunkt
-        result = values_day_df[['value']].copy()
+        result = values_day_filtered[['value']].copy()
 
         # Join aller Komponenten
-        result = result.join(gains_losses_before_fees_taxes_df[['gains_losses_before_fees_taxes']], how='left')
-        result = result.join(interest_dividends_df, how='left') if interest_dividends_df is not None else result
-        result = result.join(fees_df, how='left') if fees_df is not None else result
-        result = result.join(taxes_df, how='left') if taxes_df is not None else result
-        result = result.join(transaction_value_at_price_df, how='left') if transaction_value_at_price_df is not None else result
+        result = result.join(gains_losses_filtered[['gains_losses_before_fees_taxes']], how='left')
+        result = result.join(interest_dividends_filtered, how='left') if interest_dividends_filtered is not None else result
+        result = result.join(fees_filtered, how='left') if fees_filtered is not None else result
+        result = result.join(taxes_filtered, how='left') if taxes_filtered is not None else result
+        result = result.join(transaction_value_filtered, how='left') if transaction_value_filtered is not None else result
 
         # Fehlende Werte mit 0 auffüllen (nur für die Komponenten, nicht für value)
         for col in ['gains_losses_before_fees_taxes', 'interest_dividends', 'fees', 'taxes', 'transaction_value_at_price']:
@@ -1325,6 +1348,111 @@ def yield_components_year(yield_components_day_df, values_day_df, logger):
         logger.error(f"Unerwarteter Fehler bei yield_components_year: {type(e).__name__}: {e}")
         raise
 
+
+def profitability_year_table(yield_components_day_df, values_day_df, logger):
+    """
+    Erstellt eine Profitabilitäts-Tabelle mit Jahren als Zeilen und verschachtelten Spalten pro WKN.
+    Für jede WKN gibt es zwei Spalten: {wkn}_days (Anzahl gehaltene Tage) und {wkn}_yield (Jahresrendite).
+
+    Parameter:
+        yield_components_day_df (DataFrame): MultiIndex (date, wkn), enthält 'yield_total'
+        values_day_df (DataFrame): MultiIndex (date, wkn), enthält 'value'
+        logger (ExtendedLogger): Logger instance for output and logging.
+
+    Rückgabe:
+        DataFrame: Index = Jahr (int), Spalten = {wkn}_days, {wkn}_yield für jede WKN
+    """
+    try:
+        logger.info("Starte Erstellung der Jahres-Profitabilitäts-Tabelle...")
+
+        # Validierung
+        if yield_components_day_df is None or yield_components_day_df.empty:
+            raise ValueError("yield_components_day_df ist None oder leer")
+        if values_day_df is None or values_day_df.empty:
+            raise ValueError("values_day_df ist None oder leer")
+
+        # Kopie erstellen und Index sicherstellen
+        yield_comp = yield_components_day_df.copy()
+        yield_comp.index = pd.MultiIndex.from_arrays([
+            pd.to_datetime(yield_comp.index.get_level_values('date')),
+            yield_comp.index.get_level_values('wkn')
+        ], names=['date', 'wkn'])
+
+        # Exclude 'cash' from profitability calculations
+        yield_comp = yield_comp[yield_comp.index.get_level_values('wkn').str.lower() != 'cash']
+        logger.info("Cash ausgeschlossen von Profitabilitäts-Berechnung")
+
+        # Join mit values (nur Tage mit Bestand)
+        yield_and_value = yield_comp.join(values_day_df[['value']], how='inner')
+        yield_and_value = yield_and_value[yield_and_value['value'] > 0]
+
+        if yield_and_value.empty:
+            raise ValueError("Keine Einträge mit positivem Bestand gefunden")
+
+        # Extrahiere Jahr
+        yield_and_value['year'] = yield_and_value.index.get_level_values('date').year
+
+        # Berechne Tage pro Jahr-WKN
+        df_reset = yield_and_value.reset_index()
+
+        days_per_year_wkn = (
+            df_reset.groupby(['year', 'wkn'])
+            .size()
+            .reset_index(name='days_held')
+        )
+
+        # Berechne TWR pro Jahr-WKN
+        def calculate_twr(series):
+            """Time-Weighted Return: Produkt(1 + r) - 1"""
+            return np.prod(1 + series) - 1
+
+        yield_per_year_wkn = (
+            df_reset.groupby(['year', 'wkn'])['yield_total']
+            .apply(calculate_twr)
+            .reset_index(name='annual_yield')
+        )
+
+        # Merge days und yield
+        combined = days_per_year_wkn.merge(yield_per_year_wkn, on=['year', 'wkn'])
+
+        # Pivot: Jahr als Index, WKN als Spalten (mit days und yield)
+        result_list = []
+
+        for wkn in sorted(combined['wkn'].unique()):
+            wkn_data = combined[combined['wkn'] == wkn][['year', 'days_held', 'annual_yield']]
+            wkn_data = wkn_data.rename(columns={
+                'days_held': f'{wkn}_days',
+                'annual_yield': f'{wkn}_yield'
+            })
+            wkn_data = wkn_data.set_index('year')
+            result_list.append(wkn_data)
+
+        # Alle WKN-Dataframes zusammenführen
+        result = pd.concat(result_list, axis=1)
+
+        # Sortiere Spalten: Für jede WKN erst _days, dann _yield
+        wkns_sorted = sorted(combined['wkn'].unique())
+        sorted_columns = []
+        for wkn in wkns_sorted:
+            sorted_columns.append(f'{wkn}_days')
+            sorted_columns.append(f'{wkn}_yield')
+
+        result = result[sorted_columns]
+
+        # Index-Name setzen
+        result.index.name = 'year'
+
+        logger.info(f"Jahres-Profitabilitäts-Tabelle erstellt: {len(result)} Jahre, {len(wkns_sorted)} WKNs")
+        logger.info(f"Jahre: {sorted(result.index.tolist())}")
+
+        return result
+
+    except ValueError as ve:
+        logger.error(f"Validierungsfehler bei profitability_year_table: {ve}")
+        raise
+    except Exception as e:
+        logger.error(f"Unerwarteter Fehler bei profitability_year_table: {type(e).__name__}: {e}")
+        raise
 
 
 # Main Block 01: Initializing    
@@ -2412,6 +2540,105 @@ if __name__ == "__main__":
             logger.error("Programmausführung wird fortgesetzt.")
     else:
         logger.warning("Jährliche Renditekomponenten können nicht berechnet werden (yield_components_day_df fehlt).")
+
+    # 7.11. Jahres-Profitabilitäts-Tabelle (Jahr als Zeilen, WKN mit days/yield als Spalten)
+    if yield_components_day_df is not None and values_day_df is not None:
+        try:
+            logger.info("Erstelle Jahres-Profitabilitäts-Tabelle...")
+            profitability_year_df = profitability_year_table(
+                yield_components_day_df,
+                values_day_df,
+                logger
+            )
+
+            # Export mit Formatierung
+            # NOTE: Cannot use export_2D_df_to_excel_format because it creates duplicate column names
+            # when unstacking (year, wkn) index with (days, yield) columns. Using custom openpyxl export.
+            export_config = (settings or {}).get("Export", {}).get('profitability_year_to_excel', {})
+            if export_config.get('enabled', False):
+                filename = export_config.get('filename', '')
+                if filename:
+                    # Direkter Export mit openpyxl (mit Formatierung)
+                    try:
+                        from openpyxl import Workbook
+                        from openpyxl.worksheet.table import Table, TableStyleInfo
+
+                        wb = Workbook()
+                        ws = wb.active
+                        ws.title = 'Sheet1'
+
+                        # Schreibe Header
+                        ws.cell(row=1, column=1, value=profitability_year_df.index.name or 'year')
+                        for col_idx, col_name in enumerate(profitability_year_df.columns, start=2):
+                            ws.cell(row=1, column=col_idx, value=col_name)
+
+                        # Schreibe Daten mit Formatierung
+                        for row_idx, (year, row_data) in enumerate(profitability_year_df.iterrows(), start=2):
+                            # Jahr-Spalte (Index)
+                            cell = ws.cell(row=row_idx, column=1, value=year)
+                            cell.number_format = '0'
+
+                            # Daten-Spalten
+                            for col_idx, (col_name, value) in enumerate(row_data.items(), start=2):
+                                cell = ws.cell(row=row_idx, column=col_idx, value=value)
+
+                                if '_days' in col_name:
+                                    # Tage: Integer
+                                    cell.number_format = '#,##0'
+                                elif '_yield' in col_name:
+                                    # Yield: Prozent mit 2 Nachkommastellen
+                                    cell.number_format = '0.00%'
+
+                        # Konvertiere zu Excel-Tabelle
+                        max_col_letter = ws.cell(row=1, column=len(profitability_year_df.columns) + 1).column_letter
+                        table_range = f"A1:{max_col_letter}{len(profitability_year_df) + 1}"
+
+                        tab = Table(displayName="ProfitabilityYear", ref=table_range)
+                        style = TableStyleInfo(
+                            name="TableStyleMedium9",
+                            showFirstColumn=False,
+                            showLastColumn=False,
+                            showRowStripes=True,
+                            showColumnStripes=False
+                        )
+                        tab.tableStyleInfo = style
+                        ws.add_table(tab)
+
+                        # Spaltenbreiten und Header-Formatierung
+                        from openpyxl.styles import Alignment
+
+                        ws.column_dimensions['A'].width = 8
+                        # Jahr-Header: 90° Ausrichtung
+                        ws.cell(row=1, column=1).alignment = Alignment(textRotation=90, horizontal='center', vertical='bottom')
+
+                        for col_idx, col_name in enumerate(profitability_year_df.columns, start=2):
+                            col_letter = ws.cell(row=1, column=col_idx).column_letter
+
+                            # Spaltenbreiten
+                            if '_days' in col_name:
+                                ws.column_dimensions[col_letter].width = 4.57
+                            elif '_yield' in col_name:
+                                ws.column_dimensions[col_letter].width = 7.71
+
+                            # Header: 90° Textausrichtung
+                            ws.cell(row=1, column=col_idx).alignment = Alignment(textRotation=90, horizontal='center', vertical='bottom')
+
+                        wb.save(filename)
+                        logger.info(f"DataFrame erfolgreich in '{filename}' exportiert.")
+                        logger.info(f"Profitability-Tabelle formatiert und als Excel-Tabelle exportiert.")
+                    except Exception as export_error:
+                        logger.error(f"Export fehlgeschlagen: {export_error}")
+                else:
+                    logger.warning("Kein Dateiname für profitability_year_to_excel konfiguriert.")
+            else:
+                logger.info("Export von profitability_year ist deaktiviert.")
+
+            logger.info("Jahres-Profitabilitäts-Tabelle erfolgreich erstellt und exportiert.")
+        except Exception as e:
+            logger.error(f"Fehler bei Erstellung der Jahres-Profitabilitäts-Tabelle: {e}")
+            logger.error("Programmausführung wird fortgesetzt.")
+    else:
+        logger.warning("Jahres-Profitabilitäts-Tabelle kann nicht erstellt werden (yield_components_day_df oder values_day_df fehlt).")
 
 
     # 8. invest (Einschuss/Entnahme)

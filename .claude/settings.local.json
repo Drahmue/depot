@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Read(//c/Users/ah/Dev/ahlib/ahlib/**)",
+      "Read(//c/Users/ah/Dev/ahlib/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -14,6 +14,13 @@ A comprehensive financial portfolio analysis system that processes stock prices,
 
 ## Recent Updates
 
+### December 2025 - Yearly Profitability Analysis
+- New profitability analysis table showing annual yields with holding period transparency
+- Displays days held and annual yield percentage for each instrument per year
+- Cash excluded from profitability calculations to maintain data quality
+- Custom Excel export with dynamic formatting (scales automatically with portfolio growth)
+- Time-Weighted Return (TWR) formula for accurate multi-period performance measurement
+
 ### December 2025 - Intelligent Yield Calculation
 - Implemented intelligent denominator selection for yield calculations
 - Prevents extreme yield percentages (100%+) on first trading days and depot transfers
