@@ -122,3 +122,5 @@ Thumbs.db
 *.parquet
 *.xlsx
 *.log
+
+prices.parquet
