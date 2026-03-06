@@ -424,9 +424,7 @@ def prices_update(prices, instruments, logger):
     """
     Aktualisiert fehlende Kursdaten in 'prices' zwischen dem letzten Datum und gestern,
     wobei nur Handelstage (Mo–Fr, ohne Feiertage) berücksichtigt werden.
-    Das letzte verfügbare Datum wird pro WKN individuell bestimmt, sodass Lücken
-    einzelner WKNs auch dann gefüllt werden, wenn andere WKNs bereits aktueller sind.
-
+    
     Parameter:
         prices (DataFrame): Bestehende Kursdaten. MultiIndex ('date', 'wkn'), Spalte 'price'
         instruments (DataFrame): Enthält je WKN einen 'ticker' und optional 'default_value'
@@ -439,17 +437,25 @@ def prices_update(prices, instruments, logger):
     today = datetime.today().date()
     yesterday = pd.Timestamp(today - timedelta(days=1))
 
+    # Letztes verfügbares Datum im DataFrame
+    last_date = prices.index.get_level_values('date').max()
+
     # Deutsche Feiertage
     de_holidays = holidays.Germany()
 
-    # Letztes verfügbares Datum pro WKN (individuell, nicht global)
-    wkn_last_dates = (
-        prices.groupby(level='wkn')
-        .apply(lambda x: x.index.get_level_values('date').max())
-    )
+    # Datumsbereich: alle Kalendertage zwischen letztem Kursdatum und gestern
+    all_dates = pd.date_range(start=last_date + timedelta(days=1), end=yesterday)
+
+    # Nur Mo–Fr und keine Feiertage
+    missing_dates = [d for d in all_dates if d.weekday() < 5 and d.strftime('%Y-%m-%d') not in de_holidays]
+
+    if not missing_dates:
+        logger.info(f"Keine fehlenden Handelstage zwischen {last_date.date()} und {yesterday.date()}")
+        return prices
 
     # Für jede WKN einzeln Kursdaten abrufen
     for wkn, row in instruments.iterrows():
+        #ticker = row['ticker']
         raw_ticker = row['ticker']
 
         # Erst prüfen, ob NaN oder leer
@@ -458,21 +464,10 @@ def prices_update(prices, instruments, logger):
         else:
             ticker = str(raw_ticker).strip().upper()
 
+        
         default_value = row['default_value']
-
-        # Letztes bekanntes Datum für diese WKN bestimmen
-        if wkn in wkn_last_dates.index:
-            last_date = wkn_last_dates[wkn]
-        else:
-            logger.warning(f"WKN {wkn} nicht in prices gefunden, überspringe.")
-            continue
-
-        # Fehlende Handelstage für diese WKN berechnen
-        all_dates = pd.date_range(start=last_date + timedelta(days=1), end=yesterday)
-        missing_dates = [d for d in all_dates if d.weekday() < 5 and d.strftime('%Y-%m-%d') not in de_holidays]
-
-        if not missing_dates:
-            continue
+        #print(wkn, "Defalut Value", default_value) #debug
+        
 
         if pd.notna(ticker) and ticker.strip() != '':
             try:

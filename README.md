@@ -14,6 +14,12 @@ A comprehensive financial portfolio analysis system that processes stock prices,
 
 ## Recent Updates
 
+### March 2026 - Per-WKN Price Update Fix
+- Fixed bug in `prices_update()` where a single global `last_date` was used for all instruments
+- A transient yfinance failure for one WKN could cause a permanent gap in price data
+- Each WKN now independently tracks its own last known date and catches up from there
+- Prevents silent data gaps even when other instruments are fully up to date
+
 ### December 2025 - Yearly Profitability Analysis
 - New profitability analysis table showing annual yields with holding period transparency
 - Displays days held and annual yield percentage for each instrument per year

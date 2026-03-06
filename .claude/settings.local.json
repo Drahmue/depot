@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python:*)",
       "Read(//c/Users/ah/Dev/ahlib/ahlib/**)",
-      "Read(//c/Users/ah/Dev/ahlib/**)"
+      "Read(//c/Users/ah/Dev/ahlib/**)",
+      "Bash(.venv/Scripts/python.exe:*)"
     ],
     "deny": [],
     "ask": []
