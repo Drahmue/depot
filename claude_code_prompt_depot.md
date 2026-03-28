@@ -87,14 +87,44 @@ cd "D:\Dataserver\_Batchprozesse\depot"
 Send-ErrorNotification -ScriptName "depot" -ExitCode 1 -ErrorMessage "Das ist ein Test"
 ```
 
+## Aenderungen (2026-03-28, Nachtrag)
+
+### 5. $PSScriptRoot statt hartkodiertem UNC-Pfad (start_depot.ps1, Zeile 7)
+
+**Problem:** Manuelles Ausfuehren als Administrator schlug fehl, weil UAC-Elevation
+den Netzwerk-Token nicht erbt und der UNC-Pfad `\\WIN-H7BKO5H0RMC\_Batchprozesse\depot`
+dann nicht erreichbar war.
+
+**Loesung:** `$scriptDir = $PSScriptRoot`
+
+`$PSScriptRoot` liefert automatisch den Pfad, unter dem das Skript gestartet wurde:
+- Task Scheduler startet via `-File "D:\Dataserver\_Batchprozesse\depot\start_depot.ps1"`
+  → `$PSScriptRoot` = `D:\Dataserver\_Batchprozesse\depot` (lokaler Pfad, kein UNC)
+- Manuell als Admin ausfuehren funktioniert damit ebenfalls korrekt
+
+**Getestet:** Manuell als Administrator ausgefuehrt, Exporte wurden erfolgreich erstellt.
+
+### 6. Telegram-Benachrichtigung bei Python-Fehler (start_depot.ps1, nach Zeile 80)
+
+**Problem:** Der `catch`-Block in `start_depot.ps1` fing nur PowerShell-Exceptions ab.
+Wenn `depot.py` selbst mit Exit-Code != 0 abbrach (z.B. Excel-Datei gesperrt),
+wurde keine Notification gesendet.
+
+**Loesung:** Zusaetzliche Pruefung nach dem Python-Aufruf:
+```powershell
+if ($RC -ne 0 -and $notifyAvailable) {
+    Send-ErrorNotification -ScriptName "depot" -ExitCode $RC `
+        -ErrorMessage "Python script exited with code $RC" -LogFile $LOGFILE
+}
+```
+
+**Getestet:** Bei geoeffneter Excel-Datei Telegram-Meldung erhalten,
+bei geschlossener Excel-Datei kein Fehler und keine Meldung.
+
 ## Offene Punkte / Moegliche Verbesserungen
 
-- **UNC-Pfad-Problem loesen:** `$scriptDir` koennte auf `$PSScriptRoot` umgestellt werden,
-  damit das Skript sowohl manuell (lokaler Pfad) als auch per Task Scheduler (UNC-Pfad)
-  korrekt laeuft. Aenderung benoetigt Pruefung ob Task Scheduler dadurch beeinflusst wird.
-
-- **End-to-End-Test:** Erster echter Test erfolgt beim naechsten Task-Scheduler-Lauf
-  (taeglich 05:00 Uhr). Bei Fehler sollte eine Telegram-Nachricht ankommen.
+- **End-to-End-Test Task Scheduler:** Erster echter Test erfolgt beim naechsten
+  Task-Scheduler-Lauf (taeglich 05:00 Uhr). Bei Fehler sollte eine Telegram-Nachricht ankommen.
 
 ## notify_config.json Struktur (Referenz)
 

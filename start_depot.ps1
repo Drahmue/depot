@@ -4,7 +4,7 @@ $ErrorActionPreference = "Continue"
 $env:PYTHONIOENCODING = "utf-8"
 
 # Early error logging setup (before main script execution)
-$scriptDir = "\\WIN-H7BKO5H0RMC\_Batchprozesse\depot"
+$scriptDir = $PSScriptRoot
 $LOGDIR = "$scriptDir\logs"
 $LOGSTAMP = (Get-Date).ToString("yyyy-MM")
 $LOGFILE = "$LOGDIR\depot_$LOGSTAMP.log"
@@ -78,10 +78,16 @@ try {
     $pythonResult = & $pythonPath -u $scriptPath 2>&1
     Add-Content -Path $LOGFILE -Value $pythonResult
     $RC = $LASTEXITCODE
-    
+
     # Log completion
     $timestamp = Get-Date -Format "[yyyy-MM-dd HH:mm:ss]"
     Add-Content -Path $LOGFILE -Value "$timestamp ENDE Depot Script (ExitCode=$RC)"
+
+    # Notify if Python script failed
+    if ($RC -ne 0 -and $notifyAvailable) {
+        Send-ErrorNotification -ScriptName "depot" -ExitCode $RC `
+            -ErrorMessage "Python script exited with code $RC" -LogFile $LOGFILE
+    }
     
     # Clean up old log files (older than 120 days)
     $cutoffDate = (Get-Date).AddDays(-120)
