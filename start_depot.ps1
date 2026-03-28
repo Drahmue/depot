@@ -10,6 +10,17 @@ $LOGSTAMP = (Get-Date).ToString("yyyy-MM")
 $LOGFILE = "$LOGDIR\depot_$LOGSTAMP.log"
 $ERRORLOG = "$LOGDIR\depot_errors_$LOGSTAMP.log"
 
+# Notification-Bibliothek laden
+$notifyAvailable = $false
+$notifyLib = Join-Path $scriptDir "Send-ErrorNotification.ps1"
+if (Test-Path $notifyLib) {
+    try {
+        . $notifyLib
+        $notifyAvailable = $true
+    }
+    catch { Write-Warning "FEHLER beim Laden der Notification-Bibliothek: $_" }
+}
+
 # Create logs directory if it doesn't exist
 try {
     if (-not (Test-Path -Path $LOGDIR)) {
@@ -84,6 +95,10 @@ try {
     Add-Content -Path $LOGFILE -Value $errorMsg -ErrorAction SilentlyContinue
     "$errorMsg`nStack Trace: $($_.ScriptStackTrace)" | Out-File -FilePath $ERRORLOG -Append
     $RC = 1
+    if ($notifyAvailable) {
+        Send-ErrorNotification -ScriptName "depot" -ExitCode $RC `
+            -ErrorMessage $($_.Exception.Message) -LogFile $LOGFILE
+    }
 }
 
 # Exit with the return code
