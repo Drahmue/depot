@@ -118,6 +118,9 @@ dmypy.json
 ehthumbs.db
 Thumbs.db
 
+# Notification credentials
+notify_config.json
+
 # Data files
 *.parquet
 *.xlsx

@@ -4,11 +4,22 @@ $ErrorActionPreference = "Continue"
 $env:PYTHONIOENCODING = "utf-8"
 
 # Early error logging setup (before main script execution)
-$scriptDir = "\\HauServer\_Batchprozesse\depot"
+$scriptDir = $PSScriptRoot
 $LOGDIR = "$scriptDir\logs"
 $LOGSTAMP = (Get-Date).ToString("yyyy-MM")
 $LOGFILE = "$LOGDIR\depot_$LOGSTAMP.log"
 $ERRORLOG = "$LOGDIR\depot_errors_$LOGSTAMP.log"
+
+# Notification-Bibliothek laden
+$notifyAvailable = $false
+$notifyLib = Join-Path $scriptDir "Send-ErrorNotification.ps1"
+if (Test-Path $notifyLib) {
+    try {
+        . $notifyLib
+        $notifyAvailable = $true
+    }
+    catch { Write-Warning "FEHLER beim Laden der Notification-Bibliothek: $_" }
+}
 
 # Create logs directory if it doesn't exist
 try {
@@ -67,10 +78,16 @@ try {
     $pythonResult = & $pythonPath -u $scriptPath 2>&1
     Add-Content -Path $LOGFILE -Value $pythonResult
     $RC = $LASTEXITCODE
-    
+
     # Log completion
     $timestamp = Get-Date -Format "[yyyy-MM-dd HH:mm:ss]"
     Add-Content -Path $LOGFILE -Value "$timestamp ENDE Depot Script (ExitCode=$RC)"
+
+    # Notify if Python script failed
+    if ($RC -ne 0 -and $notifyAvailable) {
+        Send-ErrorNotification -ScriptName "depot" -ExitCode $RC `
+            -ErrorMessage "Python script exited with code $RC" -LogFile $LOGFILE
+    }
     
     # Clean up old log files (older than 120 days)
     $cutoffDate = (Get-Date).AddDays(-120)
@@ -84,6 +101,10 @@ try {
     Add-Content -Path $LOGFILE -Value $errorMsg -ErrorAction SilentlyContinue
     "$errorMsg`nStack Trace: $($_.ScriptStackTrace)" | Out-File -FilePath $ERRORLOG -Append
     $RC = 1
+    if ($notifyAvailable) {
+        Send-ErrorNotification -ScriptName "depot" -ExitCode $RC `
+            -ErrorMessage $($_.Exception.Message) -LogFile $LOGFILE
+    }
 }
 
 # Exit with the return code
