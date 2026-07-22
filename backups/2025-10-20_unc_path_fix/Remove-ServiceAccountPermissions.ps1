@@ -1,12 +1,12 @@
 # PowerShell Script to Remove Service Account Access from Finance Folders
-# Run this script as Administrator on WIN-H7BKO5H0RMC
+# Run this script as Administrator on HauServer
 # Date: 2025-10-20
 # Purpose: Undo script - Remove permissions granted to service account
 
 #Requires -RunAsAdministrator
 
 # Configuration
-$ServiceAccount = "WIN-H7BKO5H0RMC\service"
+$ServiceAccount = "HauServer\service"
 $ShareName = "Dataserver"
 $FinanceInputPath = "D:\Dataserver\Dummy\Finance_Input"
 $FinanceOutputPath = "D:\Dataserver\Dummy\Finance_Output"
@@ -137,7 +137,7 @@ if ($shareResult -and $inputResult -and $outputResult) {
     Write-Host "All permissions removed successfully!" -ForegroundColor Green
     Write-Host ""
     Write-Host "The service account no longer has access to:" -ForegroundColor Yellow
-    Write-Host "  - Share: \\WIN-H7BKO5H0RMC\Dataserver" -ForegroundColor White
+    Write-Host "  - Share: \\HauServer\Dataserver" -ForegroundColor White
     Write-Host "  - NTFS: Finance_Input" -ForegroundColor White
     Write-Host "  - NTFS: Finance_Output" -ForegroundColor White
     exit 0

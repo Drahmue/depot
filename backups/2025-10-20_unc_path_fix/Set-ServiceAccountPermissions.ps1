@@ -1,10 +1,10 @@
 # PowerShell Script to Grant Service Account Access to Finance Folders
-# Run this script as Administrator on WIN-H7BKO5H0RMC
+# Run this script as Administrator on HauServer
 # Date: 2025-10-20
 
 #Requires -RunAsAdministrator
 
-$ServiceAccount = "WIN-H7BKO5H0RMC\service"
+$ServiceAccount = "HauServer\service"
 $ShareName = "Dataserver"
 $SharePath = "D:\Dataserver"
 $FinanceInputPath = "D:\Dataserver\Dummy\Finance_Input"
@@ -117,8 +117,8 @@ if ($shareResult -and $inputResult -and $outputResult) {
     Write-Host "The service account now has access to the required folders." -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Test with these commands (as service user):" -ForegroundColor Yellow
-    Write-Host "  dir \\WIN-H7BKO5H0RMC\Dataserver\Dummy\Finance_Input" -ForegroundColor White
-    Write-Host "  dir \\WIN-H7BKO5H0RMC\Dataserver\Dummy\Finance_Output" -ForegroundColor White
+    Write-Host "  dir \\HauServer\Dataserver\Dummy\Finance_Input" -ForegroundColor White
+    Write-Host "  dir \\HauServer\Dataserver\Dummy\Finance_Output" -ForegroundColor White
     exit 0
 } else {
     Write-Host "Some permissions failed. Review errors above." -ForegroundColor Red

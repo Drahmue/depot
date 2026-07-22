@@ -23,7 +23,7 @@ Write-Host ""
 
 # Add only the correct one
 Write-Host "Adding correct safe.directory entry..." -ForegroundColor White
-$correctPath = "//WIN-H7BKO5H0RMC/_Batchprozesse/depot"
+$correctPath = "//HauServer/_Batchprozesse/depot"
 git config --global --add safe.directory $correctPath
 
 Write-Host "Added: $correctPath" -ForegroundColor Green

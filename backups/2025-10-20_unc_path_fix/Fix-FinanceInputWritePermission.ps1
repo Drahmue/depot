@@ -1,11 +1,11 @@
 # PowerShell Script to Add Write Permission to Finance_Input
-# Run this script as Administrator on WIN-H7BKO5H0RMC
+# Run this script as Administrator on HauServer
 # Date: 2025-10-20
 # Purpose: Grant Write permission to Finance_Input so depot script can check if files are open
 
 #Requires -RunAsAdministrator
 
-$ServiceAccount = "WIN-H7BKO5H0RMC\service"
+$ServiceAccount = "HauServer\service"
 $FinanceInputPath = "D:\Dataserver\Dummy\Finance_Input"
 
 Write-Host "========================================" -ForegroundColor Cyan

@@ -5,7 +5,7 @@ mit yfinance-Schlusskursen (immer 'Close', Fallback 'Adj Close').
 
 Neu/Änderungen:
 - Parquet-Auswahl öffnet standardmäßig im **Ordner des Skripts** mit vorgeschlagenem Dateinamen 'prices.parquet'.
-- Instruments-Excel hat Default: \\WIN-H7BKO5H0RMC\Dataserver\Dummy\Finance_Input\Instrumente.xlsx
+- Instruments-Excel hat Default: \\HauServer\Dataserver\Dummy\Finance_Input\Instrumente.xlsx
 - Export der Abweichungen nach "new prices.xlsx" (diff & pct_diff, inkl. backfill-Flag).
 - Erstellung eines **korrigierten DataFrames** auf Basis des Original-DFs:
   * Wenn yfinance **neue Werte** liefert und im Original-DF bereits ein Wert steht **und** dieser abweicht → aktualisieren.
@@ -52,7 +52,7 @@ EXCLUDE_WKNS = {"cash", "cm", "ftd", "lb1kwr"}
 
 # Defaults
 DEFAULT_PARQUET_NAME = "prices.parquet"
-DEFAULT_INSTRUMENTS_PATH = r"\\WIN-H7BKO5H0RMC\Dataserver\Dummy\Finance_Input\Instrumente.xlsx"
+DEFAULT_INSTRUMENTS_PATH = r"\\HauServer\Dataserver\Dummy\Finance_Input\Instrumente.xlsx"
 
 # Backfill configuration
 # Set to True to enable historical data backfilling for WKNs with limited history

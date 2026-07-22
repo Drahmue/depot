@@ -1,11 +1,11 @@
 # PowerShell Script to Upgrade Dataserver Share Permission
-# Run this script as Administrator on WIN-H7BKO5H0RMC
+# Run this script as Administrator on HauServer
 # Date: 2025-10-20
 # Purpose: Change share permission from Read to Change so NTFS Modify can work
 
 #Requires -RunAsAdministrator
 
-$ServiceAccount = "WIN-H7BKO5H0RMC\service"
+$ServiceAccount = "HauServer\service"
 $ShareName = "Dataserver"
 
 Write-Host "========================================" -ForegroundColor Cyan

@@ -4,7 +4,7 @@ $ErrorActionPreference = "Continue"
 $env:PYTHONIOENCODING = "utf-8"
 
 # Early error logging setup (before main script execution)
-$scriptDir = "\\WIN-H7BKO5H0RMC\_Batchprozesse\depot"
+$scriptDir = "\\HauServer\_Batchprozesse\depot"
 $LOGDIR = "$scriptDir\logs"
 $LOGSTAMP = (Get-Date).ToString("yyyy-MM")
 $LOGFILE = "$LOGDIR\depot_$LOGSTAMP.log"
@@ -46,7 +46,7 @@ try {
 
 try {
     # Configure git safe.directory for UNC path
-    & git config --global --add safe.directory '//WIN-H7BKO5H0RMC/_Batchprozesse/depot' 2>&1 | Out-Null
+    & git config --global --add safe.directory '//HauServer/_Batchprozesse/depot' 2>&1 | Out-Null
 
     # Pull latest updates from GitHub
     $timestamp = Get-Date -Format "[yyyy-MM-dd HH:mm:ss]"

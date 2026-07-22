@@ -1,10 +1,10 @@
 # PowerShell Script to Grant Modify Permission to Finance_Input
-# Run this script as Administrator on WIN-H7BKO5H0RMC
+# Run this script as Administrator on HauServer
 # Date: 2025-10-20
 
 #Requires -RunAsAdministrator
 
-$ServiceAccount = "WIN-H7BKO5H0RMC\service"
+$ServiceAccount = "HauServer\service"
 $FinanceInputPath = "D:\Dataserver\Dummy\Finance_Input"
 
 Write-Host "Granting Modify permission to Finance_Input..." -ForegroundColor Cyan

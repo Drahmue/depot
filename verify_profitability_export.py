@@ -8,7 +8,7 @@ print("=" * 70)
 
 try:
     # Read the exported file
-    filepath = r'\\WIN-H7BKO5H0RMC\Dataserver\Dummy\Finance_Output\profitability_year.xlsx'
+    filepath = r'\\HauServer\Dataserver\Dummy\Finance_Output\profitability_year.xlsx'
     df = pd.read_excel(filepath, index_col=[0, 1])
 
     print(f'\n✓ File successfully loaded from network share')

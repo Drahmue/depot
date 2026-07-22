@@ -53,7 +53,7 @@ if (Test-Path $keyPath) {
     } elseif ($choice -eq "2") {
         Write-Host ""
         Write-Host "Generating new SSH key..." -ForegroundColor White
-        ssh-keygen -t ed25519 -C "service@WIN-H7BKO5H0RMC" -f $keyPath -N '""'
+        ssh-keygen -t ed25519 -C "service@HauServer" -f $keyPath -N '""'
         Write-Host "  New key generated" -ForegroundColor Green
     }
 } else {
@@ -63,7 +63,7 @@ if (Test-Path $keyPath) {
     Write-Host ""
 
     # Generate key with empty passphrase (for automated scripts)
-    ssh-keygen -t ed25519 -C "service@WIN-H7BKO5H0RMC" -f $keyPath -N '""'
+    ssh-keygen -t ed25519 -C "service@HauServer" -f $keyPath -N '""'
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  Key generated successfully" -ForegroundColor Green
@@ -110,7 +110,7 @@ Write-Host "   Account SSH keys: https://github.com/settings/keys" -ForegroundCo
 Write-Host ""
 Write-Host "3. Paste the public key shown above" -ForegroundColor White
 Write-Host ""
-Write-Host "4. Give it a title like: 'WIN-H7BKO5H0RMC service account'" -ForegroundColor White
+Write-Host "4. Give it a title like: 'HauServer service account'" -ForegroundColor White
 Write-Host ""
 Write-Host "5. For Deploy Key: Check 'Allow write access' if needed" -ForegroundColor White
 Write-Host ""
@@ -118,6 +118,6 @@ Write-Host "6. Test the connection by running:" -ForegroundColor White
 Write-Host "   ssh -T git@github.com" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "7. If the repo uses HTTPS, change it to SSH:" -ForegroundColor White
-Write-Host "   cd \\WIN-H7BKO5H0RMC\_Batchprozesse\depot" -ForegroundColor Cyan
+Write-Host "   cd \\HauServer\_Batchprozesse\depot" -ForegroundColor Cyan
 Write-Host "   git remote set-url origin git@github.com:USERNAME/REPO.git" -ForegroundColor Cyan
 Write-Host ""

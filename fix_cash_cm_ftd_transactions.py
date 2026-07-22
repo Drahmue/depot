@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 # Lese bookings.xlsx
-file_bookings = r'\\WIN-H7BKO5H0RMC\Dataserver\Dummy\Finance_Input\bookings.xlsx'
+file_bookings = r'\\HauServer\Dataserver\Dummy\Finance_Input\bookings.xlsx'
 df_bookings = pd.read_excel(file_bookings)
 df_bookings['date'] = pd.to_datetime(df_bookings['date'])
 

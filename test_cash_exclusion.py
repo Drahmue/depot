@@ -18,7 +18,7 @@ try:
     for filename in test_files:
         try:
             # Try to read from network path
-            filepath = f'\\\\WIN-H7BKO5H0RMC\\Dataserver\\Dummy\\Finance_Output\\{filename}'
+            filepath = f'\\\\HauServer\\Dataserver\\Dummy\\Finance_Output\\{filename}'
             df = pd.read_excel(filepath, index_col=[0, 1])
 
             wkns = df.index.get_level_values('wkn').unique()
@@ -42,7 +42,7 @@ try:
 
     # Check profitability_year table
     try:
-        filepath = '\\\\WIN-H7BKO5H0RMC\\Dataserver\\Dummy\\Finance_Output\\profitability_year.xlsx'
+        filepath = '\\\\HauServer\\Dataserver\\Dummy\\Finance_Output\\profitability_year.xlsx'
         df = pd.read_excel(filepath, index_col=0)
 
         columns = df.columns.tolist()

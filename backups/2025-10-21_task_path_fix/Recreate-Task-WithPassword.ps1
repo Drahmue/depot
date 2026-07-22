@@ -7,7 +7,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Prompt for the Service account password
-$username = "WIN-H7BKO5H0RMC\Service"
+$username = "HauServer\Service"
 Write-Host "Please enter the password for user: $username" -ForegroundColor Yellow
 $password = Read-Host "Password" -AsSecureString
 
