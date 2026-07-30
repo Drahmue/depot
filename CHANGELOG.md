@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-07-30 — CM-Positionsabweichung durch negativen Bankbestand (Buchungskorrektur)
+
+**Beobachtung:**
+Manuelle Addition aller Buchungen (`delta`) für WKN CM ergab ein anderes Ergebnis als die von `depot.py` ausgewiesene Position in `shares_day.xlsx` (124.686,74 € vs. 124.692,96 €, Differenz 6,22 €).
+
+**Ursache:**
+`shares_from_bookings()` (depot.py:698–733) berechnet die Position pro Bank als laufende Summe und setzt einen kumulierten Bestand, der unter 0,0001 fällt, auf 0 (depot.py:726) — negative Bestände sind fachlich nicht zulässig. Bank `vw` hatte für CM einen kumulierten Bestand von −6,22 € (mehr abgebucht als je eingebucht), der dadurch auf 0 statt gegen andere Banken verrechnet wurde. Das ist kein Fehler in der Berechnungslogik von `depot.py`, sondern eine fehlerhafte/fehlende Buchung in `bookings.xlsx` bei Bank `vw`.
+
+**Behebung:**
+Korrekturbuchung in `bookings.xlsx` durch den Nutzer ergänzt. Nach der Korrektur liegt Bank `vw` bei 0,00 €, und manuelle Summe sowie `depot.py`-Ergebnis stimmen exakt überein (124.692,96 €, Restdifferenz nur Gleitkomma-Rauschen ~1e-11).
+
+**Hinweis für künftige Fälle:**
+Bei Abweichungen zwischen manueller Summe und `depot.py`-Ausgabe für ein Instrument zuerst die Bestände pro Bank prüfen (nicht nur die Gesamtsumme) — ein negativer Bestand bei einer einzelnen Bank wird von `shares_from_bookings()` stillschweigend auf 0 geflooört und erklärt eine positive Abweichung von `depot.py` gegenüber der reinen Buchungssumme.
+
+**Betroffen:** WKN CM, Bank `vw`, siehe auch bereits vorhandene `cash_cm_ftd_corrections.csv` / `fix_cash_cm_ftd_transactions.py` für ähnliche frühere CM/FTD-Korrekturen.
+
 ## 2026-03-06 — Per-WKN last_date fix in prices_update()
 
 **Bug fixed:**
