@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-08-29 — Fehlende Kurse für 28.8. durch abgelaufenes Service-Account-Passwort + stille NaN-Übernahme
+
+**Beobachtung:**
+Nutzer bemerkte, dass die Reports für den 28.8.2026 dieselben Kurse wie für den 27.8.2026 zeigten ("keine neuen Kurse geliefert").
+
+**Ursache (Kette):**
+1. Das Passwort des Service-Accounts, unter dem der Windows Task Scheduler-Job läuft, war abgelaufen. Dadurch ist der reguläre Tageslauf (sonst täglich 05:00:02 Uhr) am **27.8. und 28.8. gar nicht gestartet** — 2-Tage-Lücke in `logs/depot_2026-08.log` (letzter regulärer Lauf: 26.8. 05:01, nächster erst 29.8. 09:39).
+2. Der Nachhol-Lauf am 29.8. hat die fehlenden Tage (27./28.8.) über `prices_update()` (depot.py:423–533) nachgeholt. Für die meisten WKNs kam dabei am 28.8. von yfinance zwar eine Zeile zurück, aber mit leerem/NaN `Close`-Wert — das wird von `prices_update()` aktuell **ohne Warnung** übernommen (nur der explizite `KeyError`-Fall, wenn für das Datum gar keine Zeile existiert, wird geloggt und gewarnt, s. depot.py:511–515).
+3. `prices_import_and_process()` füllt fehlende/NaN-Kurse anschließend per Forward-Fill pro WKN auf (depot.py:1719–1723), bevor die Daten für alle Excel-Reports verwendet werden — dadurch erschien in den Reports für den 28.8. überall der Kurs vom 27.8., obwohl die zugrunde liegende `prices.parquet` für den 28.8. eigentlich `NaN` enthielt.
+
+**Behebung:**
+- Service-Account-Passwort erneuert und auf "läuft nie ab" gesetzt (durch Nutzer).
+- 32 Zeilen für 2026-08-28 aus `prices.parquet` gelöscht (Backup: `backups/prices_backup_before_2026-08-28_fix_20260829_104122.parquet`), damit `prices_update()` sie beim nächsten Lauf sauber neu abfragt.
+- `depot.py` manuell erneut ausgeführt (Exit Code 0) — für 20 von 21 Marktinstrumenten liegen jetzt echte, von 27.8. abweichende Kurse für den 28.8. vor.
+
+**Offen / bekannte Lücke:**
+- WKN `a2yzk6` (BTC-EUR) blieb nach dem Nachholen weiterhin ohne Kurs für den 28.8. (`NaN`) — yfinance liefert für diesen Ticker an dem Tag offenbar keine Daten. Wird beim nächsten regulären Lauf automatisch erneut versucht.
+- **Strukturelles Risiko, unabhängig vom aktuellen Fall:** Sobald für ein (Datum, WKN) einmal eine Zeile mit `NaN`-Preis existiert, hält `prices_update()` dieses Datum für "bereits vorhanden" (Prüfung nur auf Index-Existenz, nicht auf validen Wert, s. depot.py:446–449 sowie den bereits dokumentierten Fix vom 2026-03-06 zu genau diesem Muster bei BTC-EUR) — der Tag wird dann **nie automatisch neu abgefragt** und muss wie hier manuell bereinigt werden. Ebenso fehlt aktuell eine Warnung, wenn yfinance zwar eine Zeile, aber einen NaN-`Close`-Wert liefert (nur der `KeyError`-Fall bei komplett fehlender Zeile wird geloggt).
+- **Empfehlung für einen Code-Fix:** In `prices_update()` nach dem `Close`-Lookup zusätzlich `pd.isna(close_value)` prüfen und in diesem Fall ebenfalls warnen; zusätzlich `wkn_last_dates` nur aus Zeilen mit nicht-`NaN`-Preis bilden, damit Lücken automatisch erneut abgefragt werden.
+
+**Betroffen:** `prices.parquet` (2026-08-28, 20 von 21 Marktinstrumenten korrigiert, BTC-EUR offen), Task-Scheduler Service-Account.
+
 ## 2026-07-30 — CM-Positionsabweichung durch negativen Bankbestand (Buchungskorrektur)
 
 **Beobachtung:**
