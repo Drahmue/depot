@@ -12,10 +12,10 @@ $ERRORLOG = "$LOGDIR\depot_errors_$LOGSTAMP.log"
 
 # Notification-Bibliothek laden
 $notifyAvailable = $false
-$notifyLib = Join-Path $scriptDir "Send-ErrorNotification.ps1"
+$notifyLib = "D:\Dataserver\_Batchprozesse\_shared\Notify-Telegram.psm1"  # zentral, CS-028
 if (Test-Path $notifyLib) {
     try {
-        . $notifyLib
+        Import-Module $notifyLib -Force
         $notifyAvailable = $true
     }
     catch { Write-Warning "FEHLER beim Laden der Notification-Bibliothek: $_" }
