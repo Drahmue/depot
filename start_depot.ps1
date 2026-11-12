@@ -56,19 +56,29 @@ try {
 }
 
 try {
-    # Configure git safe.directory for UNC path
-    & git config --global --add safe.directory '//HauServer/_Batchprozesse/depot' 2>&1 | Out-Null
-
-    # Pull latest updates from GitHub
+    # Pull latest updates from GitHub (datahub DH-054, 2026-11-12):
+    # - safe.directory nur fuer diesen Aufruf (Repo gehoert Administrator, Task laeuft als Service)
+    # - Deploy-Key von Service, nur lesend (GitHub Drahmue/depot), GitHub-Hostschluessel fest in known_hosts
+    # - --ff-only: nur saubere Staende holen, bei Abweichung abbrechen statt zusammenzufuehren
+    $repoDir = ($scriptDir -replace '\\', '/')
+    $gitSsh  = 'ssh -i C:/Users/Service/.ssh/deploy_depot -o IdentitiesOnly=yes ' +
+               '-o UserKnownHostsFile=C:/Users/Service/.ssh/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes'
     $timestamp = Get-Date -Format "[yyyy-MM-dd HH:mm:ss]"
     Add-Content -Path $LOGFILE -Value "$timestamp Pulling updates from GitHub"
 
-    $gitResult = & git pull origin main 2>&1
+    $gitResult = & git -c "safe.directory=$repoDir" -c "core.sshCommand=$gitSsh" pull --ff-only origin main 2>&1 |
+        ForEach-Object { "$_" }
+    $gitRC = $LASTEXITCODE
     Add-Content -Path $LOGFILE -Value $gitResult
-    
-    if ($LASTEXITCODE -ne 0) {
+
+    if ($gitRC -ne 0) {
         $timestamp = Get-Date -Format "[yyyy-MM-dd HH:mm:ss]"
-        Add-Content -Path $LOGFILE -Value "$timestamp Git pull failed, continuing with existing code"
+        Add-Content -Path $LOGFILE -Value "$timestamp Git pull failed (RC=$gitRC), continuing with existing code"
+        if ($notifyAvailable) {
+            $gitText = (($gitResult | Where-Object { $_ -match 'fatal|error|denied|diverg|not possible' }) -join ' ')
+            Send-WarningNotification -ScriptName "depot" `
+                -Text "git pull fehlgeschlagen (RC=$gitRC), Lauf mit vorhandenem Code. $gitText"
+        }
     }
     
     # Main script execution
