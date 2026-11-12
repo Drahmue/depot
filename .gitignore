@@ -127,3 +127,6 @@ notify_config.json
 *.log
 
 prices.parquet
+# Konfiguration je Maschine (HauServer: lokale Pfade, AHMain: S:\ + Testausgabe); Vorlage: depot.ini.template
+depot.ini
+*.bak_*
