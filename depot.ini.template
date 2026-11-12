@@ -1,6 +1,6 @@
 # depot.ini.template - Vorlage. Jede Maschine hat ihre eigene depot.ini (nicht im Repo, .gitignore).
 # HauServer (Task, Konto Service): lokale Pfade D:\Dataserver\... wie unten (Standard: nie UNC).
-# AHMain (Entwicklung): Eingaben lesend ueber S:\Dummy\Finance_Input\..., Ausgaben (Export) in einen
+# AHMain (Entwicklung): Eingaben lesend per UNC \\HauServer\Dataserver\Dummy\Finance_Input\..., Ausgaben (Export) in einen
 # eigenen Testordner, NIE nach Finance_Output (dort schreibt nur der Task auf dem HauServer).
 [Paths]
 #path for all files Import Export and systemfiles, if "Default" then path of the Skript itself is used
