@@ -9,6 +9,21 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 import importlib
 import holidays
 
+# Telegram-Meldung (nur auf dem HauServer vorhanden; fehlt sie, laeuft depot ohne Meldung)
+SHARED_DIR = r"D:\Dataserver\_Batchprozesse\_shared"
+if os.path.isdir(SHARED_DIR):
+    sys.path.insert(0, SHARED_DIR)
+try:
+    from notify_telegram import send_warning
+except ImportError:
+    def send_warning(*_a, **_k) -> bool:
+        return False
+
+# Kurslücken (DH-054): fehlende Kurse werden so viele Kalendertage rückwirkend
+# erneut angefragt; Warnung, wenn eine WKN mehr Handelstage ohne Kurs hat.
+PRICE_RETRY_DAYS = 10
+PRICE_STALE_TRADING_DAYS = 3
+
 
 # ALLGEMEINE FUNKTIONEN
 
@@ -420,12 +435,65 @@ def prices_check_for_instruments(prices, instruments, logger):
         logger.info("Alle WKNs aus 'instruments' sind in 'prices' vorhanden.")
 
 # Funktion zum Aktualisieren der Kursdaten zwischen last_date und gestern
+def _is_trading_day(d, de_holidays):
+    return d.weekday() < 5 and d.strftime('%Y-%m-%d') not in de_holidays
+
+
+def price_dates_to_fetch(prices, wkn, last_date, yesterday, de_holidays, retry_days=PRICE_RETRY_DAYS):
+    """
+    Handelstage, für die ein Kurs angefragt werden soll (DH-054):
+    alle Handelstage nach 'last_date' bis 'yesterday' sowie Handelstage der letzten
+    'retry_days' Kalendertage, für die noch kein Kurs vorliegt (fehlt oder NaN).
+    """
+    have = prices.xs(wkn, level='wkn')['price'] if wkn in prices.index.get_level_values('wkn') else pd.Series(dtype=float)
+    have = have[have.notna()]
+    have_dates = set(pd.DatetimeIndex(have.index).normalize())
+    start = min(last_date + timedelta(days=1), yesterday - timedelta(days=retry_days - 1))
+    dates = []
+    for d in pd.date_range(start=start, end=yesterday):
+        if not _is_trading_day(d, de_holidays):
+            continue
+        if d > last_date or d not in have_dates:
+            dates.append(d)
+    return dates
+
+
+def prices_stale_check(prices, instruments, logger, max_trading_days=PRICE_STALE_TRADING_DAYS, today=None):
+    """
+    Liefert die WKNs mit Ticker, die mehr als 'max_trading_days' Handelstage
+    (bis gestern) ohne Kurs sind, als Liste von Texten; schreibt eine Warnung ins Log.
+    """
+    today = today or datetime.today().date()
+    yesterday = pd.Timestamp(today - timedelta(days=1))
+    de_holidays = holidays.Germany()
+    stale = []
+    for wkn, row in instruments.iterrows():
+        raw_ticker = row['ticker']
+        if pd.isna(raw_ticker) or str(raw_ticker).strip() == '':
+            continue
+        if wkn not in prices.index.get_level_values('wkn'):
+            continue
+        s = prices.xs(wkn, level='wkn')['price']
+        s = s[s.notna()]
+        if s.empty:
+            continue
+        last_ok = pd.Timestamp(s.index.max()).normalize()
+        gap = [d for d in pd.date_range(last_ok + timedelta(days=1), yesterday) if _is_trading_day(d, de_holidays)]
+        if len(gap) > max_trading_days:
+            stale.append(f"{wkn} ({str(raw_ticker).strip().upper()}): letzter Kurs {last_ok.date()}, {len(gap)} Handelstage ohne Kurs")
+    for text in stale:
+        logger.warning(f"Kurslücke: {text}")
+    return stale
+
+
 def prices_update(prices, instruments, logger):
     """
     Aktualisiert fehlende Kursdaten in 'prices' zwischen dem letzten Datum und gestern,
     wobei nur Handelstage (Mo–Fr, ohne Feiertage) berücksichtigt werden.
     Das letzte verfügbare Datum wird pro WKN individuell bestimmt, sodass Lücken
     einzelner WKNs auch dann gefüllt werden, wenn andere WKNs bereits aktueller sind.
+    Seit DH-054 (11/2026): Fehlt ein Kurs, wird kein NaN geschrieben; Handelstage der
+    letzten PRICE_RETRY_DAYS Tage ohne Kurs werden bei jedem Lauf erneut angefragt.
 
     Parameter:
         prices (DataFrame): Bestehende Kursdaten. MultiIndex ('date', 'wkn'), Spalte 'price'
@@ -467,14 +535,17 @@ def prices_update(prices, instruments, logger):
             logger.warning(f"WKN {wkn} nicht in prices gefunden, überspringe.")
             continue
 
-        # Fehlende Handelstage für diese WKN berechnen
-        all_dates = pd.date_range(start=last_date + timedelta(days=1), end=yesterday)
-        missing_dates = [d for d in all_dates if d.weekday() < 5 and d.strftime('%Y-%m-%d') not in de_holidays]
+        if ticker:
+            # Fehlende Handelstage inkl. erneuter Anfrage der letzten Tage ohne Kurs
+            missing_dates = price_dates_to_fetch(prices, wkn, last_date, yesterday, de_holidays)
+        else:
+            all_dates = pd.date_range(start=last_date + timedelta(days=1), end=yesterday)
+            missing_dates = [d for d in all_dates if _is_trading_day(d, de_holidays)]
 
         if not missing_dates:
             continue
 
-        if pd.notna(ticker) and ticker.strip() != '':
+        if ticker:
             try:
                 data = yf.download(
                     ticker,
@@ -485,9 +556,12 @@ def prices_update(prices, instruments, logger):
                 )
 
                 if data.empty:
-                    logger.warning(
-                        f"Keine Daten für Ticker {ticker} im Zeitraum {missing_dates[0].date()} bis {missing_dates[-1].date()}"
-                    )
+                    msg = (f"Keine Daten für Ticker {ticker} im Zeitraum {missing_dates[0].date()} "
+                           f"bis {missing_dates[-1].date()} (wird erneut angefragt)")
+                    if missing_dates == [yesterday]:
+                        logger.info(msg)  # Vortag oft noch nicht verfügbar (z. B. BTC um 05:00)
+                    else:
+                        logger.warning(msg)
                     continue
 
                 # Stelle sicher, dass der Index normiert ist
@@ -506,13 +580,18 @@ def prices_update(prices, instruments, logger):
                         else:
                             close_value = close_entry
 
+                        if pd.isna(close_value):
+                            raise KeyError(normalized_date)
+
                         prices.loc[(normalized_date, wkn), 'price'] = close_value
 
                     except KeyError:
-                        prices.loc[(normalized_date, wkn), 'price'] = np.nan
-                        logger.warning(
-                            f"Kein Kurs für {ticker} am {normalized_date.date()} verfügbar"
-                        )
+                        # Kein NaN schreiben: der Tag wird beim nächsten Lauf erneut angefragt
+                        msg = f"Kein Kurs für {ticker} am {normalized_date.date()} verfügbar (wird erneut angefragt)"
+                        if normalized_date == yesterday:
+                            logger.info(msg)  # Vortag oft noch nicht verfügbar (z. B. BTC um 05:00)
+                        else:
+                            logger.warning(msg)
 
                     except Exception as e:
                         logger.error(
@@ -1679,7 +1758,17 @@ def prices_import_and_process(settings, instruments_df, logger):
 
         # 3. Aktualisiere die Kurse in prices_df mit prices_update
         prices_df = prices_update(prices_df, instruments_df, logger)
-        
+
+        # 3a. Kurslücken prüfen und per Telegram melden (DH-054)
+        try:
+            stale = prices_stale_check(prices_df, instruments_df, logger)
+            if stale:
+                send_warning("depot", f"Kurse fehlen seit mehr als {PRICE_STALE_TRADING_DAYS} Handelstagen:\n"
+                             + "\n".join(stale))
+        except Exception as e:
+            logger.warning(f"Fehler bei der Prüfung auf Kurslücken: {e}")
+            warning_count += 1
+
         # 4. Speichere den aktualisierten DataFrame in die Parquet-Datei
         try:
             prices_df.to_parquet((settings or {}).get('Files', {}).get('prices', ''))
